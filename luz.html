@@ -8,119 +8,320 @@
         :root {
             --bg-color: #f4f4f9;
             --card-bg: #ffffff;
-            --text-color: #333333;
+            --text-color: #1e293b;
+            --subtext-color: #64748b;
             --accent-color: #2563eb;
-            --green: #22c55e;
-            --orange: #f97316;
-            --red: #ef4444;
+            --green: #16a34a;
+            --green-bg: rgba(22, 163, 74, 0.1);
+            --orange: #ea580c;
+            --orange-bg: rgba(234, 88, 12, 0.1);
+            --red: #dc2626;
+            --red-bg: rgba(220, 38, 38, 0.1);
             --grid-line: #e2e8f0;
+            --card-border: #e2e8f0;
         }
+
         @media (prefers-color-scheme: dark) {
             :root {
-                --bg-color: #121214;
-                --card-bg: #1e1e24;
-                --text-color: #e2e8f0;
+                --bg-color: #0f172a;
+                --card-bg: #1e293b;
+                --text-color: #f1f5f9;
+                --subtext-color: #94a3b8;
                 --accent-color: #3b82f6;
+                --green: #4ade80;
+                --green-bg: rgba(74, 222, 128, 0.15);
+                --orange: #fb923c;
+                --orange-bg: rgba(251, 146, 60, 0.15);
+                --red: #f87171;
+                --red-bg: rgba(248, 113, 113, 0.15);
                 --grid-line: #334155;
+                --card-border: #334155;
             }
         }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
             padding: 16px;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
         }
+
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
+            gap: 12px;
         }
-        h1 { font-size: 1.4rem; margin: 0; }
+
+        h1 {
+            font-size: 1.35rem;
+            margin: 0;
+            font-weight: 800;
+        }
+
         button {
             background-color: var(--accent-color);
-            color: white;
+            color: #ffffff;
             border: none;
-            padding: 8px 16px;
+            padding: 10px 18px;
             border-radius: 8px;
-            font-weight: bold;
+            font-size: 0.9rem;
+            font-weight: 600;
             cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
         }
-        .status { font-size: 0.85rem; opacity: 0.7; margin-bottom: 15px; }
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            font-size: 0.85rem;
+            color: var(--subtext-color);
+            margin-bottom: 16px;
+            padding: 8px 12px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+        }
+
         .tabs {
             display: flex;
             gap: 8px;
             overflow-x: auto;
             margin-bottom: 20px;
-            padding-bottom: 4px;
+            padding-bottom: 6px;
+            -webkit-overflow-scrolling: touch;
         }
+
         .tab {
-            padding: 8px 12px;
+            padding: 8px 14px;
             background: var(--card-bg);
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             white-space: nowrap;
-            border: 1px solid transparent;
+            border: 1px solid var(--card-border);
+            font-size: 0.88rem;
+            font-weight: 500;
+            user-select: none;
+            transition: all 0.2s ease;
         }
-        .tab.active {
+
+        .tab:hover {
             border-color: var(--accent-color);
-            font-weight: bold;
         }
+
+        .tab.active {
+            background: var(--accent-color);
+            color: #ffffff;
+            border-color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background-color: var(--card-bg);
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .summary-card .label {
+            font-size: 0.75rem;
+            color: var(--subtext-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .summary-card .val {
+            font-size: 1.15rem;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+
+        .summary-card .sub {
+            font-size: 0.72rem;
+            color: var(--subtext-color);
+            margin-top: 2px;
+        }
+
         .chart-container {
             background-color: var(--card-bg);
             border-radius: 12px;
             padding: 16px;
             margin-bottom: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid var(--card-border);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
+
         .chart-title {
-            font-size: 1rem;
-            font-weight: bold;
-            margin-bottom: 12px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
+
+        .chart-title span {
+            font-size: 0.8rem;
+            font-weight: normal;
+            color: var(--subtext-color);
+        }
+
         svg {
             width: 100%;
             height: auto;
             display: block;
+            overflow: visible;
         }
+
         .axis-text {
             font-size: 10px;
-            fill: var(--text-color);
-            opacity: 0.6;
+            fill: var(--subtext-color);
         }
+
         .prices-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
             gap: 10px;
         }
+
         .hour-card {
             background-color: var(--card-bg);
-            padding: 12px;
-            border-radius: 8px;
+            padding: 12px 10px;
+            border-radius: 10px;
             text-align: center;
-            border-left: 5px solid #ccc;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid var(--card-border);
+            border-left: 5px solid #cbd5e1;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
-        .hour-card.cheap { border-left-color: var(--green); }
-        .hour-card.medium { border-left-color: var(--orange); }
-        .hour-card.expensive { border-left-color: var(--red); }
-        .time { font-size: 0.9rem; font-weight: bold; }
-        .price { font-size: 1.15rem; margin: 6px 0; font-weight: 800; }
+
+        .hour-card.cheap {
+            border-left-color: var(--green);
+            background: linear-gradient(to right, var(--green-bg), var(--card-bg) 40%);
+        }
+
+        .hour-card.medium {
+            border-left-color: var(--orange);
+            background: linear-gradient(to right, var(--orange-bg), var(--card-bg) 40%);
+        }
+
+        .hour-card.expensive {
+            border-left-color: var(--red);
+            background: linear-gradient(to right, var(--red-bg), var(--card-bg) 40%);
+        }
+
+        .hour-card.current {
+            outline: 2px solid var(--accent-color);
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.25);
+        }
+
+        .badge-now {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: var(--accent-color);
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 800;
+            padding: 2px 5px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .badge-tag {
+            font-size: 0.68rem;
+            font-weight: 700;
+            margin-top: 4px;
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            align-self: center;
+        }
+
+        .badge-min {
+            background-color: var(--green-bg);
+            color: var(--green);
+        }
+
+        .badge-max {
+            background-color: var(--red-bg);
+            color: var(--red);
+        }
+
+        .time {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--subtext-color);
+        }
+
+        .price {
+            font-size: 1.15rem;
+            margin: 6px 0 2px 0;
+            font-weight: 800;
+        }
+
+        .no-data {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: var(--subtext-color);
+            padding: 30px 16px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px dashed var(--card-border);
+        }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>PVPC Oficial (REE)</h1>
-        <button id="btnFetch">Actualizar</button>
+        <h1>⚡ PVPC Oficial (REE)</h1>
+        <button id="btnFetch">↻ Actualizar</button>
     </header>
-    <div id="status" class="status">Cargando datos locales...</div>
+
+    <div id="status" class="status">Iniciando aplicación...</div>
 
     <div class="tabs" id="dayTabs"></div>
 
-    <div class="chart-container" id="chartWrapper">
-        <div class="chart-title">Evolución Horaria (€/kWh)</div>
+    <div class="summary-grid" id="summaryContainer" style="display: none;"></div>
+
+    <div class="chart-container" id="chartWrapper" style="display: none;">
+        <div class="chart-title">
+            <span>Evolución Horaria</span>
+            <span>€ / kWh</span>
+        </div>
         <div id="chartContainer"></div>
     </div>
 
@@ -128,13 +329,21 @@
 
     <script>
         const STORAGE_KEY = 'ree_official_pvpc_v1';
-        let historyData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-        
+        let historyData = {};
+
+        try {
+            historyData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        } catch (e) {
+            console.error('Error al leer localStorage:', e);
+            historyData = {};
+        }
+
         let activeDateStr = getFormattedDate(new Date());
 
         const btnFetch = document.getElementById('btnFetch');
         const statusDiv = document.getElementById('status');
         const dayTabs = document.getElementById('dayTabs');
+        const summaryContainer = document.getElementById('summaryContainer');
         const pricesContainer = document.getElementById('pricesContainer');
         const chartContainer = document.getElementById('chartContainer');
         const chartWrapper = document.getElementById('chartWrapper');
@@ -167,54 +376,130 @@
         function saveAndCleanup(newData, dateStr) {
             historyData[dateStr] = newData;
             const keepDays = getNavigableDays();
-            
+
             Object.keys(historyData).forEach(key => {
                 if (!keepDays.includes(key)) delete historyData[key];
             });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(historyData));
+
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(historyData));
+            } catch (e) {
+                console.error('Error al guardar en localStorage:', e);
+            }
         }
 
         async function fetchOfficialPrices(dateStr) {
-            statusDiv.textContent = `Conectando con Red Eléctrica Española (${dateStr})...`;
+            statusDiv.textContent = `Consultando Red Eléctrica Española para el día ${dateStr}...`;
             const apiDate = getApiDateParam(dateStr);
-            
-            const url = `https://ree.es{apiDate}T00:00&end_date=${apiDate}T23:59&time_trunc=hour&indicators=1001`;
-            
+            const url = `https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real?start_date=${apiDate}T00:00&end_date=${apiDate}T23:59&time_trunc=hour`;
+
             try {
                 const response = await fetch(url);
-                if (!response.ok) throw new Error('Datos no publicados aún');
+                if (!response.ok) {
+                    if (response.status === 502 || response.status === 404) {
+                        throw new Error('Día no publicado aún');
+                    }
+                    throw new Error(`Error en servidor REE (HTTP ${response.status})`);
+                }
+
                 const json = await response.json();
-                
-                const values = json.included[0].attributes.values;
-                if (!values || values.length === 0) throw new Error('Día no disponible');
+                const pvpcItem = json.included?.find(item => item.id === '1001' || item.type === 'PVPC') || json.included?.[0];
 
+                if (!pvpcItem || !pvpcItem.attributes?.values?.length) {
+                    throw new Error('Día no disponible en los datos de REE');
+                }
+
+                const values = pvpcItem.attributes.values;
                 const formattedHours = values.map(item => {
-                    const dateObj = new Date(item.datetime);
-                    const hourNum = dateObj.getHours();
-                    const nextHourNum = (hourNum + 1) % 25;
+                    const match = item.datetime.match(/T(\d{2}):/);
+                    const hourNum = match ? parseInt(match[1], 10) : new Date(item.datetime).getHours();
+                    const nextHourNum = hourNum + 1;
                     const labelHour = `${String(hourNum).padStart(2, '0')}-${String(nextHourNum).padStart(2, '0')}`;
-                    const priceKwh = item.value / 1000; 
+                    const priceKwh = item.value / 1000;
 
-                    return { hour: labelHour, price: priceKwh };
+                    return {
+                        hour: labelHour,
+                        hourNum: hourNum,
+                        price: priceKwh
+                    };
                 });
 
                 saveAndCleanup(formattedHours, dateStr);
-                statusDiv.textContent = `Actualizado desde REE. Datos guardados en local.`;
+                statusDiv.textContent = `Actualizado desde REE (${dateStr}). Datos guardados en local.`;
                 return formattedHours;
             } catch (error) {
-                statusDiv.textContent = `Aviso oficial: Datos de mañana no listos o estás sin conexión.`;
+                const todayStr = getFormattedDate(new Date());
+                const tomorrowObj = new Date();
+                tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+                const tomorrowStr = getFormattedDate(tomorrowObj);
+
+                if (dateStr === tomorrowStr) {
+                    statusDiv.textContent = 'Los precios de mañana aún no se han publicado (suelen publicarse sobre las 20:15 - 20:30 h).';
+                } else if (!navigator.onLine) {
+                    statusDiv.textContent = 'Sin conexión a Internet y sin datos guardados para este día.';
+                } else {
+                    statusDiv.textContent = `No se pudieron cargar los datos de REE para el ${dateStr}. (${error.message})`;
+                }
                 return null;
             }
         }
 
-        function getPriceClass(price, allPrices) {
-            const numericPrices = allPrices.map(p => p.price);
-            const min = Math.min(...numericPrices);
-            const max = Math.max(...numericPrices);
-            const range = max - min || 1;
-            if (price < min + range * 0.33) return 'cheap';
-            if (price > max - range * 0.33) return 'expensive';
+        function getPriceClass(price, min, max) {
+            const range = max - min || 0.001;
+            if (price <= min + range * 0.33) return 'cheap';
+            if (price >= max - range * 0.33) return 'expensive';
             return 'medium';
+        }
+
+        function renderSummary(dayData, isToday) {
+            if (!dayData || dayData.length === 0) {
+                summaryContainer.style.display = 'none';
+                return;
+            }
+
+            const prices = dayData.map(h => h.price);
+            const minPrice = Math.min(...prices);
+            const maxPrice = Math.max(...prices);
+            const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+
+            const minHour = dayData.find(h => h.price === minPrice)?.hour || '';
+            const maxHour = dayData.find(h => h.price === maxPrice)?.hour || '';
+
+            const currentHourNum = new Date().getHours();
+            const currentItem = isToday ? dayData.find(h => h.hourNum === currentHourNum) : null;
+
+            let html = '';
+
+            if (currentItem) {
+                html += `
+                    <div class="summary-card" style="border-color: var(--accent-color);">
+                        <div class="label" style="color: var(--accent-color);">Ahora (${currentItem.hour}h)</div>
+                        <div class="val" style="color: var(--accent-color);">${currentItem.price.toFixed(4)} €</div>
+                        <div class="sub">precio actual</div>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="summary-card">
+                    <div class="label">Media del día</div>
+                    <div class="val">${avgPrice.toFixed(4)} €</div>
+                    <div class="sub">€/kWh</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label" style="color: var(--green);">Mínimo</div>
+                    <div class="val" style="color: var(--green);">${minPrice.toFixed(4)} €</div>
+                    <div class="sub">a las ${minHour}h</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label" style="color: var(--red);">Máximo</div>
+                    <div class="val" style="color: var(--red);">${maxPrice.toFixed(4)} €</div>
+                    <div class="sub">a las ${maxHour}h</div>
+                </div>
+            `;
+
+            summaryContainer.innerHTML = html;
+            summaryContainer.style.display = 'grid';
         }
 
         function renderChart(dayData) {
@@ -227,20 +512,22 @@
             const numericPrices = dayData.map(h => h.price);
             const minPrice = Math.min(...numericPrices);
             const maxPrice = Math.max(...numericPrices);
-            const priceRange = maxPrice - minPrice || 1;
+            const priceRange = maxPrice - minPrice || 0.001;
 
             const width = 500, height = 180;
-            const paddingLeft = 45, paddingRight = 15, paddingTop = 15, paddingBottom = 25;
+            const paddingLeft = 52, paddingRight = 16, paddingTop = 20, paddingBottom = 26;
             const graphWidth = width - paddingLeft - paddingRight;
             const graphHeight = height - paddingTop - paddingBottom;
+            const count = dayData.length > 1 ? dayData.length - 1 : 1;
 
             const points = dayData.map((h, i) => {
-                const x = paddingLeft + (i / (dayData.length - 1)) * graphWidth;
+                const x = paddingLeft + (i / count) * graphWidth;
                 const y = paddingTop + graphHeight - ((h.price - minPrice) / priceRange) * graphHeight;
-                return { x, y, hour: h.hour.split('-') };
+                return { x, y, hour: h.hour.split('-')[0], price: h.price };
             });
 
-            const pathD = points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`, '');
+            const pathD = points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`, '');
+            const areaD = `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${(paddingTop + graphHeight).toFixed(1)} L ${points[0].x.toFixed(1)} ${(paddingTop + graphHeight).toFixed(1)} Z`;
 
             let gridLines = '';
             const gridTicks = 3;
@@ -249,8 +536,8 @@
                 const y = paddingTop + graphHeight - ratio * graphHeight;
                 const val = minPrice + ratio * priceRange;
                 gridLines += `
-                    <line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="var(--grid-line)" stroke-dasharray="3,3" />
-                    <text x="${paddingLeft - 8}" y="${y + 4}" text-anchor="end" class="axis-text">${val.toFixed(4)}</text>
+                    <line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${(width - paddingRight).toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--grid-line)" stroke-dasharray="3,3" />
+                    <text x="${(paddingLeft - 8).toFixed(1)}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" class="axis-text">${val.toFixed(4)}</text>
                 `;
             }
 
@@ -258,8 +545,168 @@
             points.forEach((p, i) => {
                 if (i % 4 === 0 || i === points.length - 1) {
                     xAxisLabels += `
-                        <text x="${p.x}" y="${height - 6}" text-anchor="middle" class="axis-text">${p.hour[0]}:00</text>
-`;}});chartContainer.innerHTML = <svg viewBox="0 0 ${width} ${height}"> ${gridLines} ${xAxisLabels} <path d="${pathD}" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /> ${points.map(p =>).join('')} </svg> ;}function renderPrices() {pricesContainer.innerHTML = '';const dayData = historyData[activeDateStr];renderChart(dayData);if (!dayData) {pricesContainer.innerHTML = <p style="grid-column: 1/-1; text-align: center; opacity: 0.6; padding: 20px;">No hay datos para este día.<br>Conéctate y haz clic en <b>Actualizar</b>.<br><small>(Los precios de mañana salen sobre las 20:30)</small></p>;return;}dayData.forEach(h => {const card = document.createElement('div');card.className = hour-card ${getPriceClass(h.price, dayData)};card.innerHTML = <div class="time">${h.hour}</div> <div class="price">${h.price.toFixed(5)} <small style="font-size:0.65rem">€/kWh</small></div>;pricesContainer.appendChild(card);});}function renderTabs() {dayTabs.innerHTML = '';const navigableDays = getNavigableDays();const todayStr = getFormattedDate(new Date());const tomorrowObj = new Date();tomorrowObj.setDate(tomorrowObj.getDate() + 1);const tomorrowStr = getFormattedDate(tomorrowObj);navigableDays.forEach((dateStr, index) => {const tab = document.createElement('div');tab.className = tab ${dateStr === activeDateStr ? 'active' : ''};let label = dateStr.substring(0, 5);if (dateStr === tomorrowStr) label = "Mañana 🗓️";else if (dateStr === todayStr) label = "Hoy 🏠";tab.textContent = label;tab.addEventListener('click', () => {activeDateStr = dateStr;renderTabs();renderPrices();});dayTabs.appendChild(tab);});}btnFetch.addEventListener('click', async () => {await fetchOfficialPrices(activeDateStr);renderPrices();});async function init() {renderTabs();if (!historyData[activeDateStr]) {await fetchOfficialPrices(activeDateStr);} else {statusDiv.textContent = Cargado desde el almacenamiento offline del móvil.;}renderPrices();}init();
-</script>
-    </body>
-  </html>
+                        <text x="${p.x.toFixed(1)}" y="${(height - 8).toFixed(1)}" text-anchor="middle" class="axis-text">${p.hour}h</text>
+                    `;
+                }
+            });
+
+            const circles = points.map(p => `
+                <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="var(--accent-color)">
+                    <title>${p.hour}:00 - ${p.price.toFixed(4)} €/kWh</title>
+                </circle>
+            `).join('');
+
+            chartContainer.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}">
+                    <defs>
+                        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="var(--accent-color)" stop-opacity="0.25" />
+                            <stop offset="100%" stop-color="var(--accent-color)" stop-opacity="0.0" />
+                        </linearGradient>
+                    </defs>
+                    ${gridLines}
+                    ${xAxisLabels}
+                    <path d="${areaD}" fill="url(#chartGrad)" />
+                    <path d="${pathD}" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                    ${circles}
+                </svg>
+            `;
+        }
+
+        function renderPrices() {
+            pricesContainer.innerHTML = '';
+            const dayData = historyData[activeDateStr];
+            const todayStr = getFormattedDate(new Date());
+            const isToday = (activeDateStr === todayStr);
+
+            renderSummary(dayData, isToday);
+            renderChart(dayData);
+
+            if (!dayData || dayData.length === 0) {
+                pricesContainer.innerHTML = `
+                    <div class="no-data">
+                        <p style="margin: 0 0 8px 0; font-weight: 600; font-size: 1rem;">No hay datos para este día</p>
+                        <p style="margin: 0; font-size: 0.85rem;">Conéctate y haz clic en <b>Actualizar</b> para descargar los precios de REE.<br>
+                        <small style="opacity: 0.8;">(Los precios de mañana se publican cada día a partir de las 20:15 - 20:30)</small></p>
+                    </div>
+                `;
+                return;
+            }
+
+            const numericPrices = dayData.map(h => h.price);
+            const minPrice = Math.min(...numericPrices);
+            const maxPrice = Math.max(...numericPrices);
+            const currentHourNum = new Date().getHours();
+
+            dayData.forEach(h => {
+                const card = document.createElement('div');
+                const priceClass = getPriceClass(h.price, minPrice, maxPrice);
+                const isCurrent = isToday && (h.hourNum === currentHourNum);
+                const isMin = (h.price === minPrice);
+                const isMax = (h.price === maxPrice);
+
+                card.className = `hour-card ${priceClass} ${isCurrent ? 'current' : ''}`;
+
+                let badgeHtml = '';
+                if (isCurrent) {
+                    badgeHtml = '<div class="badge-now">Ahora</div>';
+                }
+
+                let tagHtml = '';
+                if (isMin) {
+                    tagHtml = '<span class="badge-tag badge-min">Mínimo</span>';
+                } else if (isMax) {
+                    tagHtml = '<span class="badge-tag badge-max">Máximo</span>';
+                }
+
+                card.innerHTML = `
+                    ${badgeHtml}
+                    <div class="time">${h.hour} h</div>
+                    <div class="price">${h.price.toFixed(4)} <small style="font-size:0.65rem">€/kWh</small></div>
+                    ${tagHtml}
+                `;
+                pricesContainer.appendChild(card);
+            });
+        }
+
+        function showLoading() {
+            summaryContainer.style.display = 'none';
+            chartWrapper.style.display = 'none';
+            pricesContainer.innerHTML = `
+                <div class="no-data" style="padding: 40px 16px;">
+                    <p style="margin: 0; font-size: 1rem; font-weight: 600;">Cargando precios...</p>
+                </div>
+            `;
+        }
+
+        function renderTabs() {
+            dayTabs.innerHTML = '';
+            const navigableDays = getNavigableDays();
+            const todayStr = getFormattedDate(new Date());
+            const tomorrowObj = new Date();
+            tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+            const tomorrowStr = getFormattedDate(tomorrowObj);
+
+            navigableDays.forEach(dateStr => {
+                const tab = document.createElement('div');
+                tab.className = `tab ${dateStr === activeDateStr ? 'active' : ''}`;
+
+                let label = dateStr.substring(0, 5);
+                if (dateStr === tomorrowStr) {
+                    label = "Mañana 🗓️";
+                } else if (dateStr === todayStr) {
+                    label = "Hoy 🏠";
+                } else {
+                    const parts = dateStr.split('-');
+                    const dt = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+                    const weekday = dt.toLocaleDateString('es-ES', { weekday: 'short' });
+                    label = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${parts[0]}/${parts[1]}`;
+                }
+
+                tab.textContent = label;
+                tab.addEventListener('click', async () => {
+                    if (activeDateStr === dateStr) return;
+                    activeDateStr = dateStr;
+                    renderTabs();
+                    if (!historyData[activeDateStr]) {
+                        showLoading();
+                        await fetchOfficialPrices(activeDateStr);
+                    }
+                    renderPrices();
+                });
+                dayTabs.appendChild(tab);
+            });
+        }
+
+        btnFetch.addEventListener('click', async () => {
+            btnFetch.disabled = true;
+            const originalText = btnFetch.textContent;
+            btnFetch.textContent = '↻ Cargando...';
+            if (!historyData[activeDateStr]) {
+                showLoading();
+            }
+            try {
+                await fetchOfficialPrices(activeDateStr);
+            } finally {
+                btnFetch.disabled = false;
+                btnFetch.textContent = originalText;
+                renderPrices();
+            }
+        });
+
+        async function init() {
+            renderTabs();
+            if (historyData[activeDateStr] && historyData[activeDateStr].length > 0) {
+                statusDiv.textContent = 'Datos cargados desde el almacenamiento local (modo offline disponible).';
+                renderPrices();
+            } else {
+                showLoading();
+                await fetchOfficialPrices(activeDateStr);
+                renderPrices();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
