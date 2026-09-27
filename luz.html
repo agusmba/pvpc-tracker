@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luz Histórico (Offline SPA)</title>
+    <title>PVPC Oficial REE</title>
     <style>
         :root {
             --bg-color: #f4f4f9;
@@ -13,6 +13,7 @@
             --green: #22c55e;
             --orange: #f97316;
             --red: #ef4444;
+            --grid-line: #e2e8f0;
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -20,6 +21,7 @@
                 --card-bg: #1e1e24;
                 --text-color: #e2e8f0;
                 --accent-color: #3b82f6;
+                --grid-line: #334155;
             }
         }
         body {
@@ -35,7 +37,7 @@
             align-items: center;
             margin-bottom: 20px;
         }
-        h1 { font-size: 1.5rem; margin: 0; }
+        h1 { font-size: 1.4rem; margin: 0; }
         button {
             background-color: var(--accent-color);
             color: white;
@@ -65,6 +67,28 @@
             border-color: var(--accent-color);
             font-weight: bold;
         }
+        .chart-container {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .chart-title {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .axis-text {
+            font-size: 10px;
+            fill: var(--text-color);
+            opacity: 0.6;
+        }
         .prices-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -82,45 +106,56 @@
         .hour-card.medium { border-left-color: var(--orange); }
         .hour-card.expensive { border-left-color: var(--red); }
         .time { font-size: 0.9rem; font-weight: bold; }
-        .price { font-size: 1.2rem; margin: 6px 0; font-weight: 800; }
-        .zone { font-size: 0.75rem; opacity: 0.6; }
+        .price { font-size: 1.15rem; margin: 6px 0; font-weight: 800; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Precio Luz PVPC</h1>
+        <h1>PVPC Oficial (REE)</h1>
         <button id="btnFetch">Actualizar</button>
     </header>
-    <div id="status" class="status">Cargando datos...</div>
+    <div id="status" class="status">Cargando datos locales...</div>
 
     <div class="tabs" id="dayTabs"></div>
+
+    <div class="chart-container" id="chartWrapper">
+        <div class="chart-title">Evolución Horaria (€/kWh)</div>
+        <div id="chartContainer"></div>
+    </div>
+
     <div class="prices-grid" id="pricesContainer"></div>
 
     <script>
-        // Configuración y variables de estado
-        const STORAGE_KEY = 'pvpc_history_data';
+        const STORAGE_KEY = 'ree_official_pvpc_v1';
         let historyData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        
         let activeDateStr = getFormattedDate(new Date());
 
-        // Elementos del DOM
         const btnFetch = document.getElementById('btnFetch');
         const statusDiv = document.getElementById('status');
         const dayTabs = document.getElementById('dayTabs');
         const pricesContainer = document.getElementById('pricesContainer');
+        const chartContainer = document.getElementById('chartContainer');
+        const chartWrapper = document.getElementById('chartWrapper');
 
-        // Formatear fechas a DD-MM-YYYY
         function getFormattedDate(date) {
-            const d = new Date(date);
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            return `${day}-${month}-${year}`;
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${day}-${month}-${date.getFullYear()}`;
         }
 
-        // Obtener el listado de los últimos 7 días
-        function getLast7Days() {
+        function getApiDateParam(dateStr) {
+            const parts = dateStr.split('-');
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+
+        function getNavigableDays() {
             const days = [];
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            days.push(getFormattedDate(tomorrow));
+
             for (let i = 0; i < 7; i++) {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
@@ -129,128 +164,102 @@
             return days;
         }
 
-        // Guardar y mantener solo la última semana en LocalStorage
         function saveAndCleanup(newData, dateStr) {
             historyData[dateStr] = newData;
-            const validDays = getLast7Days();
+            const keepDays = getNavigableDays();
             
-            // Eliminar días más antiguos del almacenamiento
             Object.keys(historyData).forEach(key => {
-                if (!validDays.includes(key)) {
-                    delete historyData[key];
-                }
+                if (!keepDays.includes(key)) delete historyData[key];
             });
-
             localStorage.setItem(STORAGE_KEY, JSON.stringify(historyData));
         }
 
-        // Consultar precios a la API pública externa
-        async function fetchPrices(dateStr) {
-            statusDiv.textContent = `Buscando precios para el ${dateStr}...`;
-            // Endpoint simplificado de la API de Preciodelaluz.org para evitar problemas de CORS y tokens en local
-            const url = `https://preciodelaluz.org{dateStr}`;
+        async function fetchOfficialPrices(dateStr) {
+            statusDiv.textContent = `Conectando con Red Eléctrica Española (${dateStr})...`;
+            const apiDate = getApiDateParam(dateStr);
+            
+            const url = `https://ree.es{apiDate}T00:00&end_date=${apiDate}T23:59&time_trunc=hour&indicators=1001`;
             
             try {
                 const response = await fetch(url);
-                if (!response.ok) throw new Error('No disponible');
-                const data = await response.json();
+                if (!response.ok) throw new Error('Datos no publicados aún');
+                const json = await response.json();
                 
-                // Convertir la respuesta a una estructura limpia de 24 horas
-                const hoursArray = Object.values(data).sort((a,b) => parseInt(a.hour) - parseInt(b.hour));
-                
-                if(hoursArray.length > 0) {
-                    saveAndCleanup(hoursArray, dateStr);
-                    statusDiv.textContent = `Actualizado desde la red. Datos de hoy listos.`;
-                    return hoursArray;
-                }
+                const values = json.included[0].attributes.values;
+                if (!values || values.length === 0) throw new Error('Día no disponible');
+
+                const formattedHours = values.map(item => {
+                    const dateObj = new Date(item.datetime);
+                    const hourNum = dateObj.getHours();
+                    const nextHourNum = (hourNum + 1) % 25;
+                    const labelHour = `${String(hourNum).padStart(2, '0')}-${String(nextHourNum).padStart(2, '0')}`;
+                    const priceKwh = item.value / 1000; 
+
+                    return { hour: labelHour, price: priceKwh };
+                });
+
+                saveAndCleanup(formattedHours, dateStr);
+                statusDiv.textContent = `Actualizado desde REE. Datos guardados en local.`;
+                return formattedHours;
             } catch (error) {
-                statusDiv.textContent = `Modo Offline. No se pudieron descargar nuevos datos (Último intento: ${new Date().toLocaleTimeString()})`;
+                statusDiv.textContent = `Aviso oficial: Datos de mañana no listos o estás sin conexión.`;
                 return null;
             }
         }
 
-        // Clasificar según el nivel de precio (Barato, Medio, Caro)
         function getPriceClass(price, allPrices) {
             const numericPrices = allPrices.map(p => p.price);
             const min = Math.min(...numericPrices);
             const max = Math.max(...numericPrices);
-            const range = max - min;
-            
+            const range = max - min || 1;
             if (price < min + range * 0.33) return 'cheap';
             if (price > max - range * 0.33) return 'expensive';
             return 'medium';
         }
 
-        // Renderizar la cuadrícula de horas
-        function renderPrices() {
-            pricesContainer.innerHTML = '';
-            const dayData = historyData[activeDateStr];
-
-            if (!dayData) {
-                pricesContainer.innerHTML = `<p style="grid-column: 1/-1; text-align: center; opacity: 0.6;">Sin datos guardados para este día. Conéctate a internet y pulsa "Actualizar".</p>`;
+        function renderChart(dayData) {
+            if (!dayData || dayData.length === 0) {
+                chartWrapper.style.display = 'none';
                 return;
             }
+            chartWrapper.style.display = 'block';
 
-            dayData.forEach(h => {
-                const card = document.createElement('div');
-                const priceClass = getPriceClass(h.price, dayData);
-                card.className = `hour-card ${priceClass}`;
-                
-                // Pasar precio de MWh o centavos a €/kWh dividiendo entre 1000 según devuelva la API
-                const displayPrice = (h.price / 1000).toFixed(5);
+            const numericPrices = dayData.map(h => h.price);
+            const minPrice = Math.min(...numericPrices);
+            const maxPrice = Math.max(...numericPrices);
+            const priceRange = maxPrice - minPrice || 1;
 
-                card.innerHTML = `
-                    <div class="time">${h.hour}</div>
-                    <div class="price">${displayPrice} <small style="font-size:0.7rem">€/kWh</small></div>
-                    <div class="zone">${h.is-cheap ? 'Económico' : h.is-under-avg ? 'Bajo la media' : 'Pico'}</div>
+            const width = 500, height = 180;
+            const paddingLeft = 45, paddingRight = 15, paddingTop = 15, paddingBottom = 25;
+            const graphWidth = width - paddingLeft - paddingRight;
+            const graphHeight = height - paddingTop - paddingBottom;
+
+            const points = dayData.map((h, i) => {
+                const x = paddingLeft + (i / (dayData.length - 1)) * graphWidth;
+                const y = paddingTop + graphHeight - ((h.price - minPrice) / priceRange) * graphHeight;
+                return { x, y, hour: h.hour.split('-') };
+            });
+
+            const pathD = points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`, '');
+
+            let gridLines = '';
+            const gridTicks = 3;
+            for (let i = 0; i <= gridTicks; i++) {
+                const ratio = i / gridTicks;
+                const y = paddingTop + graphHeight - ratio * graphHeight;
+                const val = minPrice + ratio * priceRange;
+                gridLines += `
+                    <line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="var(--grid-line)" stroke-dasharray="3,3" />
+                    <text x="${paddingLeft - 8}" y="${y + 4}" text-anchor="end" class="axis-text">${val.toFixed(4)}</text>
                 `;
-                pricesContainer.appendChild(card);
-            });
-        }
-
-        // Renderizar pestañas de navegación de días
-        function renderTabs() {
-            dayTabs.innerHTML = '';
-            const last7Days = getLast7Days();
-
-            last7Days.forEach((dateStr, index) => {
-                const tab = document.createElement('div');
-                tab.className = `tab ${dateStr === activeDateStr ? 'active' : ''}`;
-                
-                let label = dateStr.substring(0, 5); // Mostrar DD-MM
-                if (index === 0) label = "Hoy (" + label + ")";
-                if (index === 1) label = "Ayer";
-
-                tab.textContent = label;
-                tab.addEventListener('click', () => {
-                    activeDateStr = dateStr;
-                    renderTabs();
-                    renderPrices();
-                });
-                dayTabs.appendChild(tab);
-            });
-        }
-
-        // Acción del botón actualizar
-        btnFetch.addEventListener('click', async () => {
-            await fetchPrices(activeDateStr);
-            renderPrices();
-        });
-
-        // Inicialización de la App
-        async function init() {
-            renderTabs();
-            // Si no tenemos datos de hoy en el localStorage, intentamos buscarlos automáticamente
-            if (!historyData[activeDateStr]) {
-                await fetchPrices(activeDateStr);
-            } else {
-                statusDiv.textContent = `Cargado desde el almacenamiento local del dispositivo.`;
             }
-            renderPrices();
-        }
 
-        init();
-    </script>
-</body>
-</html>
-
+            let xAxisLabels = '';
+            points.forEach((p, i) => {
+                if (i % 4 === 0 || i === points.length - 1) {
+                    xAxisLabels += `
+                        <text x="${p.x}" y="${height - 6}" text-anchor="middle" class="axis-text">${p.hour[0]}:00</text>
+`;}});chartContainer.innerHTML = <svg viewBox="0 0 ${width} ${height}"> ${gridLines} ${xAxisLabels} <path d="${pathD}" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /> ${points.map(p =>).join('')} </svg> ;}function renderPrices() {pricesContainer.innerHTML = '';const dayData = historyData[activeDateStr];renderChart(dayData);if (!dayData) {pricesContainer.innerHTML = <p style="grid-column: 1/-1; text-align: center; opacity: 0.6; padding: 20px;">No hay datos para este día.<br>Conéctate y haz clic en <b>Actualizar</b>.<br><small>(Los precios de mañana salen sobre las 20:30)</small></p>;return;}dayData.forEach(h => {const card = document.createElement('div');card.className = hour-card ${getPriceClass(h.price, dayData)};card.innerHTML = <div class="time">${h.hour}</div> <div class="price">${h.price.toFixed(5)} <small style="font-size:0.65rem">€/kWh</small></div>;pricesContainer.appendChild(card);});}function renderTabs() {dayTabs.innerHTML = '';const navigableDays = getNavigableDays();const todayStr = getFormattedDate(new Date());const tomorrowObj = new Date();tomorrowObj.setDate(tomorrowObj.getDate() + 1);const tomorrowStr = getFormattedDate(tomorrowObj);navigableDays.forEach((dateStr, index) => {const tab = document.createElement('div');tab.className = tab ${dateStr === activeDateStr ? 'active' : ''};let label = dateStr.substring(0, 5);if (dateStr === tomorrowStr) label = "Mañana 🗓️";else if (dateStr === todayStr) label = "Hoy 🏠";tab.textContent = label;tab.addEventListener('click', () => {activeDateStr = dateStr;renderTabs();renderPrices();});dayTabs.appendChild(tab);});}btnFetch.addEventListener('click', async () => {await fetchOfficialPrices(activeDateStr);renderPrices();});async function init() {renderTabs();if (!historyData[activeDateStr]) {await fetchOfficialPrices(activeDateStr);} else {statusDiv.textContent = Cargado desde el almacenamiento offline del móvil.;}renderPrices();}init();
+</script>
+    </body>
+  </html>
