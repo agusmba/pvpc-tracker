@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luz Histórico (Offline SPA)</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --accent-color: #2563eb;
+            --green: #22c55e;
+            --orange: #f97316;
+            --red: #ef4444;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #121214;
+                --card-bg: #1e1e24;
+                --text-color: #e2e8f0;
+                --accent-color: #3b82f6;
+            }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 16px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1 { font-size: 1.5rem; margin: 0; }
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .status { font-size: 0.85rem; opacity: 0.7; margin-bottom: 15px; }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            margin-bottom: 20px;
+            padding-bottom: 4px;
+        }
+        .tab {
+            padding: 8px 12px;
+            background: var(--card-bg);
+            border-radius: 6px;
+            cursor: pointer;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }
+        .tab.active {
+            border-color: var(--accent-color);
+            font-weight: bold;
+        }
+        .prices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 10px;
+        }
+        .hour-card {
+            background-color: var(--card-bg);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 5px solid #ccc;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .hour-card.cheap { border-left-color: var(--green); }
+        .hour-card.medium { border-left-color: var(--orange); }
+        .hour-card.expensive { border-left-color: var(--red); }
+        .time { font-size: 0.9rem; font-weight: bold; }
+        .price { font-size: 1.2rem; margin: 6px 0; font-weight: 800; }
+        .zone { font-size: 0.75rem; opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Precio Luz PVPC</h1>
+        <button id="btnFetch">Actualizar</button>
+    </header>
+    <div id="status" class="status">Cargando datos...</div>
+
+    <div class="tabs" id="dayTabs"></div>
+    <div class="prices-grid" id="pricesContainer"></div>
+
+    <script>
+        // Configuración y variables de estado
+        const STORAGE_KEY = 'pvpc_history_data';
+        let historyData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        let activeDateStr = getFormattedDate(new Date());
+
+        // Elementos del DOM
+        const btnFetch = document.getElementById('btnFetch');
+        const statusDiv = document.getElementById('status');
+        const dayTabs = document.getElementById('dayTabs');
+        const pricesContainer = document.getElementById('pricesContainer');
+
+        // Formatear fechas a DD-MM-YYYY
+        function getFormattedDate(date) {
+            const d = new Date(date);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}-${month}-${year}`;
+        }
+
+        // Obtener el listado de los últimos 7 días
+        function getLast7Days() {
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                days.push(getFormattedDate(d));
+            }
+            return days;
+        }
+
+        // Guardar y mantener solo la última semana en LocalStorage
+        function saveAndCleanup(newData, dateStr) {
+            historyData[dateStr] = newData;
+            const validDays = getLast7Days();
+            
+            // Eliminar días más antiguos del almacenamiento
+            Object.keys(historyData).forEach(key => {
+                if (!validDays.includes(key)) {
+                    delete historyData[key];
+                }
+            });
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(historyData));
+        }
+
+        // Consultar precios a la API pública externa
+        async function fetchPrices(dateStr) {
+            statusDiv.textContent = `Buscando precios para el ${dateStr}...`;
+            // Endpoint simplificado de la API de Preciodelaluz.org para evitar problemas de CORS y tokens en local
+            const url = `https://preciodelaluz.org{dateStr}`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('No disponible');
+                const data = await response.json();
+                
+                // Convertir la respuesta a una estructura limpia de 24 horas
+                const hoursArray = Object.values(data).sort((a,b) => parseInt(a.hour) - parseInt(b.hour));
+                
+                if(hoursArray.length > 0) {
+                    saveAndCleanup(hoursArray, dateStr);
+                    statusDiv.textContent = `Actualizado desde la red. Datos de hoy listos.`;
+                    return hoursArray;
+                }
+            } catch (error) {
+                statusDiv.textContent = `Modo Offline. No se pudieron descargar nuevos datos (Último intento: ${new Date().toLocaleTimeString()})`;
+                return null;
+            }
+        }
+
+        // Clasificar según el nivel de precio (Barato, Medio, Caro)
+        function getPriceClass(price, allPrices) {
+            const numericPrices = allPrices.map(p => p.price);
+            const min = Math.min(...numericPrices);
+            const max = Math.max(...numericPrices);
+            const range = max - min;
+            
+            if (price < min + range * 0.33) return 'cheap';
+            if (price > max - range * 0.33) return 'expensive';
+            return 'medium';
+        }
+
+        // Renderizar la cuadrícula de horas
+        function renderPrices() {
+            pricesContainer.innerHTML = '';
+            const dayData = historyData[activeDateStr];
+
+            if (!dayData) {
+                pricesContainer.innerHTML = `<p style="grid-column: 1/-1; text-align: center; opacity: 0.6;">Sin datos guardados para este día. Conéctate a internet y pulsa "Actualizar".</p>`;
+                return;
+            }
+
+            dayData.forEach(h => {
+                const card = document.createElement('div');
+                const priceClass = getPriceClass(h.price, dayData);
+                card.className = `hour-card ${priceClass}`;
+                
+                // Pasar precio de MWh o centavos a €/kWh dividiendo entre 1000 según devuelva la API
+                const displayPrice = (h.price / 1000).toFixed(5);
+
+                card.innerHTML = `
+                    <div class="time">${h.hour}</div>
+                    <div class="price">${displayPrice} <small style="font-size:0.7rem">€/kWh</small></div>
+                    <div class="zone">${h.is-cheap ? 'Económico' : h.is-under-avg ? 'Bajo la media' : 'Pico'}</div>
+                `;
+                pricesContainer.appendChild(card);
+            });
+        }
+
+        // Renderizar pestañas de navegación de días
+        function renderTabs() {
+            dayTabs.innerHTML = '';
+            const last7Days = getLast7Days();
+
+            last7Days.forEach((dateStr, index) => {
+                const tab = document.createElement('div');
+                tab.className = `tab ${dateStr === activeDateStr ? 'active' : ''}`;
+                
+                let label = dateStr.substring(0, 5); // Mostrar DD-MM
+                if (index === 0) label = "Hoy (" + label + ")";
+                if (index === 1) label = "Ayer";
+
+                tab.textContent = label;
+                tab.addEventListener('click', () => {
+                    activeDateStr = dateStr;
+                    renderTabs();
+                    renderPrices();
+                });
+                dayTabs.appendChild(tab);
+            });
+        }
+
+        // Acción del botón actualizar
+        btnFetch.addEventListener('click', async () => {
+            await fetchPrices(activeDateStr);
+            renderPrices();
+        });
+
+        // Inicialización de la App
+        async function init() {
+            renderTabs();
+            // Si no tenemos datos de hoy en el localStorage, intentamos buscarlos automáticamente
+            if (!historyData[activeDateStr]) {
+                await fetchPrices(activeDateStr);
+            } else {
+                statusDiv.textContent = `Cargado desde el almacenamiento local del dispositivo.`;
+            }
+            renderPrices();
+        }
+
+        init();
+    </script>
+</body>
+</html>
+
