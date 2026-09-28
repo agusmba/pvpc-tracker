@@ -403,9 +403,14 @@
                 }
 
                 const json = await response.json();
-                const pvpcItem = json.included?.find(item => item.id === '1001' || item.type === 'PVPC') || json.included?.[0];
+                // Solo tomamos PVPC (id=1001), ignorando Precio mercado spot por completo
+                const pvpcItem = json.included?.find(item => item.id === '1001' || item.type === 'PVPC');
 
-                if (!pvpcItem || !pvpcItem.attributes?.values?.length) {
+                if (!pvpcItem) {
+                    throw new Error('Serie PVPC no encontrada en respuesta de REE (día no publicado)');
+                }
+
+                if (!pvpcItem.attributes?.values?.length) {
                     throw new Error('Día no disponible en los datos de REE');
                 }
 
