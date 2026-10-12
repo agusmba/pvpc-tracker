@@ -1,4 +1,4 @@
-# 🤖 Agentes - PVPC Tracker (luz.html)
+# 🤖 Agentes - PVPC Tracker (pages/index.html)
 
 ## 🎯 Objetivo
 
@@ -42,7 +42,7 @@ En cada sesión:
 
 ### 5. Migrar al archivo principal
 Al finalizar feature:
-- Mover código a `luz.html`
+- Mover código a `pages/index.html`
 - Actualizar almacenamiento con versión nueva
 - Verificar regresiones
 
@@ -59,9 +59,8 @@ Al finalizar feature:
 ```
 .scratch/
 ├── <feature>/.gitkeep           # Feature activa (en progreso)
-│   ├── 01-alcance-de-ticket.md  # Definición inicial
-│   ├── 02-testes.md             # Casos de prueba acordados
-│   └── 03-comprobaciones.md     # Validación post-implementación
+│   ├── 01-alcance-de-ticket.md  # Definición inicial, con casos de prueba y validación
+│   └── 02-otro-ticket.md        # Otro ticket, con su definición, pruebas y validación
 ├── <feature-completado>/         # Archive features terminadas (opcional)
 └── cleanup.log                   # Registra qué tickets se han cerrado
 ```
