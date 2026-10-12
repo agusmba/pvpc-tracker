@@ -143,6 +143,11 @@
             margin-bottom: 20px;
         }
 
+        /* Placeholder invisible para que la grilla no se recolocan al cambiar de día */
+        .summary-card.placeholder {
+            visibility: hidden;
+        }
+
         .summary-card {
             background-color: var(--card-bg);
             padding: 12px;
@@ -483,6 +488,9 @@
                         <div class="sub">precio actual</div>
                     </div>
                 `;
+            } else {
+                // Placeholder invisible para mantener la celda y evitar recolocar el resto de tarjetas
+                html += `<div class="summary-card placeholder"></div>`;
             }
 
             html += `
