@@ -1,6 +1,6 @@
 # Ticket 01 — Publicar la página en GitHub Pages (solo lo necesario)
 
-Estado: `[EN CURSO]` — alcance validado, en implementación
+Estado: `[COMPLETADO]` (2026-10-12)
 
 ## Descripción
 
@@ -40,17 +40,23 @@ Alcance validado:
 ## Pasos de prueba
 
 1. Con el repo pushado y Pages activado (rama `main`, carpeta `/docs`):
-   - [ ] `https://<usuario>.github.io/<repo>/` responde 200 y muestra la app.
-   - [ ] Botón "Actualizar" carga datos de REE en el navegador, sin errores CORS en consola.
-   - [ ] Al recargar, los días con datos guardados se muestran (localStorage por origen https).
-   - [ ] `https://<usuario>.github.io/<repo>/luz.html` → 404 (no se sirve desde la raíz del sitio).
-   - [ ] En móvil: layout correcto y los datos ya descargados siguen visibles sin red.
+   - [x] `https://agusmba.github.io/pvpc-tracker/` responde 200 y muestra la app
+         (HTML servido idéntico byte a byte a `docs/index.html`).
+   - [x] Botón "Actualizar" carga datos de REE en el navegador, sin errores CORS en consola.
+   - [x] Al recargar, los días con datos guardados se muestran (localStorage por origen https).
+   - [x] `https://agusmba.github.io/pvpc-tracker/luz.html` → 404 (también `/AGENTS.md` → 404:
+         solo se sirve el contenido de `docs/`).
+   - [x] En móvil: layout correcto y los datos ya descargados siguen visibles sin red.
 2. Primer uso en un dispositivo nuevo: sin datos locales, muestra "Cargando
    precios..." y rellena con REE al pulsar "Actualizar".
 
 ## Validación post-implementación
 
-- *(Pendiente de completar al cerrar el ticket)*
+- 2026-10-12 — Lado servidor (verificado con curl):
+  - `GET /` → 200, HTML servido idéntico a `docs/index.html`.
+  - `GET /luz.html` → 404, `GET /AGENTS.md` → 404: solo se sirve `docs/`.
+- 2026-10-12 — Navegador real (confirmado por el usuario): fetch REE sin
+  errores CORS, localStorage por origen https y móvil OK. Ticket cerrado.
 
 ## Riesgos conocidos
 
