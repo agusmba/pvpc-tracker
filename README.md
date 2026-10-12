@@ -1,12 +1,18 @@
-Prompt inicial utilizado:
+# PVPC Tracker ⚡
 
-```
-```
-quiero programar una spa ligera y necesito ayuda para generar el prompt inicial
-quiero el código en un solo archivo, para que sea sencillo ejecutarlo desde un móvil sin necesidad de hacerle hosting en ningún sitio. Necesitará usar almacenamiento local (el del navegador chrome/firefox me sirve). Recogerá los precios del PVPC cuando se publiquen y mantendrá un histórico de la última semana. La idea es que funcione offline, así que con que consulte los precios una vez al día es suficiente y pueda funcionar offline.
-```
+SPA ligera en un solo archivo HTML (`docs/index.html`) para consultar los precios oficiales del PVPC publicados por Red Eléctrica Española (REE). Sin dependencias, sin hosting: se abre directamente desde el móvil o el escritorio.
 
-Segundo prompt:
-necesito que se conecta a una página oficial para obtener los precios del pvpc para el día siguiente (quizás también el de los últimos días)
+## Características
+- Precios oficiales hora a hora de la API pública de datos de REE (serie PVPC)
+- Historial de 7 días + previsión del día siguiente, con gráfica horaria y resumen (mínimo/máximo/media)
+- Funciona offline: guarda el histórico en `localStorage` y actualiza una vez al día
+- Diseño mobile-first con modo oscuro automático
 
-```
+## Uso
+1. Abrir `docs/index.html` en el navegador.
+2. Pulsa **↻ Actualizar** para descargar los precios del día seleccionado (los de mañana se publican sobre las 20:15–20:30).
+3. Después, la app funciona offline con los datos guardados.
+
+## Notas
+- Los datos se almacenan en el navegador (`localStorage`, clave `ree_official_pvpc_v1`); borrar los datos del sitio borra el histórico.
+- El código de la app vive íntegramente en `docs/index.html`; las reglas de trabajo están en `AGENTS.md`.
