@@ -9,14 +9,15 @@ sirviendo **únicamente** un subdirectorio con lo imprescindible, sin exponer
 el resto del repositorio como sitio web.
 
 Alcance validado:
-- Subdirectorio `pages/` que contiene únicamente `index.html`.
-- `luz.html` se **mueve** a `pages/index.html` (no copia): el archivo principal
-  de la app vive desde ahora en `pages/index.html`, única fuente de verdad.
+- Subdirectorio `docs/` que contiene únicamente `index.html` (GitHub solo
+  permite como fuente sin CI la raíz o `/docs`; con `pages/` haría falta CI).
+- `luz.html` se **mueve** a `docs/index.html` (no copia): el archivo principal
+  de la app vive desde ahora en `docs/index.html`, única fuente de verdad.
 - Repo público (lo exige el tier gratuito de GitHub Pages).
 - Sin CI por ahora: no hay build que hacer y, al mover el fichero, tampoco hay
   copia que sincronizar.
 - Configurar GitHub Pages para desplegar desde ese subdirectorio (Settings →
-  Pages → Deploy from a branch → rama `master`, carpeta `/pages`): el contenido
+  Pages → Deploy from a branch → rama `main`, carpeta `/docs`): el contenido
   del subdirectorio se sirve como raíz del sitio, sin prefijo en la URL.
 
 ## Casos de uso afectados
@@ -24,7 +25,7 @@ Alcance validado:
 1. Acceso desde el móvil u otro dispositivo sin abrir archivo local: la URL de
    Pages carga la app y consulta REE directamente desde el navegador (CORS
    verificado: `access-control-allow-origin: *`).
-2. Solo se sirve en el sitio web lo que haya dentro de `pages/`; el resto del
+2. Solo se sirve en el sitio web lo que haya dentro de `docs/`; el resto del
    repo (`AGENTS.md`, `README.md`, `.scratch/`) no aparece en la URL.
 3. Navegación normal de la app (tabs de días, gráfico, resumen, modo offline con
    datos ya descargados) idéntica a la versión local.
@@ -33,12 +34,12 @@ Alcance validado:
 
 - URL pública estable `https://<usuario>.github.io/<repo>/` sirviendo la app.
 - HTTPS automático, sin build ni servidor propio.
-- El repo mantiene su estructura actual; `pages/` es el único contenido
+- El repo mantiene su estructura actual; `docs/` es el único contenido
   publicado y contiene directamente el archivo principal de la app.
 
 ## Pasos de prueba
 
-1. Con el repo pushado y Pages activado (rama `master`, carpeta `/pages`):
+1. Con el repo pushado y Pages activado (rama `main`, carpeta `/docs`):
    - [ ] `https://<usuario>.github.io/<repo>/` responde 200 y muestra la app.
    - [ ] Botón "Actualizar" carga datos de REE en el navegador, sin errores CORS en consola.
    - [ ] Al recargar, los días con datos guardados se muestran (localStorage por origen https).
@@ -54,7 +55,7 @@ Alcance validado:
 ## Riesgos conocidos
 
 1. **Cambio de flujo local**: la app se edita ahora directamente en
-   `pages/index.html` (ya no existe `luz.html` en la raíz). Sin riesgo de
+   `docs/index.html` (ya no existe `luz.html` en la raíz). Sin riesgo de
    desincronización al ser un único fichero. Mejora futura (fuera de este
    ticket): CI con GitHub Actions (`actions/deploy-pages`) si más adelante se
    quiere publicación automatizada o build.
@@ -68,6 +69,7 @@ Alcance validado:
 
 ## Decisiones tomadas (validadas)
 
-- [x] Nombre del subdirectorio: `pages/`.
+- [x] Nombre del subdirectorio: `docs/` (cambiado de `pages/`: GitHub solo
+      permite la raíz o `/docs` como fuente sin CI).
 - [x] Repo público (necesario para el tier gratuito).
-- [x] Sin CI; en lugar de copiar, **mover** `luz.html` a `pages/index.html`.
+- [x] Sin CI; en lugar de copiar, **mover** `luz.html` a `docs/index.html`.

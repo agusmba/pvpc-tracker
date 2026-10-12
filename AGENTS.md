@@ -1,4 +1,4 @@
-# 🤖 Agentes - PVPC Tracker (pages/index.html)
+# 🤖 Agentes - PVPC Tracker (docs/index.html)
 
 ## 🎯 Objetivo
 
@@ -42,7 +42,7 @@ En cada sesión:
 
 ### 5. Migrar al archivo principal
 Al finalizar feature:
-- Mover código a `pages/index.html`
+- Mover código a `docs/index.html`
 - Actualizar almacenamiento con versión nueva
 - Verificar regresiones
 
