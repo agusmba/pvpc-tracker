@@ -449,14 +449,102 @@
 
     <script>
         const STORAGE_KEY = 'ree_official_pvpc_v1';
-        let historyData = {};
 
-        try {
-            historyData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-        } catch (e) {
-            console.error('Error al leer localStorage:', e);
-            historyData = {};
-        }
+        // ── Módulo registroPvpc ──────────────────────────────────────────────
+        // Seam: "cargar un día". Interface:
+        //   obtener(ds, {forzar, alConsultar}) → {horas, fuente} | {motivo, detalle}
+        //   guardadoLocal(ds) → horas guardadas o undefined (lectura sin red)
+        // Implementación privada: caché en localStorage, fetch a REE, normalización
+        // del payload y limpieza de días fuera de la ventana navegable.
+        const registroPvpc = (function () {
+            let historyData = {};
+            try {
+                historyData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+            } catch (e) {
+                console.error('Error al leer localStorage:', e);
+                historyData = {};
+            }
+
+            function save(dateStr, newData) {
+                historyData[dateStr] = newData;
+                const keepDays = getNavigableDays();
+                Object.keys(historyData).forEach(key => {
+                    if (!keepDays.includes(key)) delete historyData[key];
+                });
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(historyData));
+                } catch (e) {
+                    console.error('Error al guardar en localStorage:', e);
+                }
+            }
+
+            async function obtener(dateStr, opts) {
+                const { forzar = false, alConsultar = null } = opts || {};
+                const cached = historyData[dateStr];
+                if (!forzar && cached && cached.length > 0) {
+                    return { horas: cached, fuente: 'local' };
+                }
+                // El module decide si hace falta red; notifica al caller para que
+                // muestre el UX de carga sin que el caller espíe el caché.
+                if (alConsultar) {
+                    alConsultar(dateStr, { habiaDatosLocales: !!(cached && cached.length) });
+                }
+
+                const apiDate = getApiDateParam(dateStr);
+                const url = `https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real?start_date=${apiDate}T00:00&end_date=${apiDate}T23:59&time_trunc=hour`;
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        if (response.status === 502 || response.status === 404) {
+                            throw { motivo: 'no-publicado', detalle: 'Día no publicado aún' };
+                        }
+                        throw { motivo: 'error-ree', detalle: `Error en servidor REE (HTTP ${response.status})` };
+                    }
+
+                    const json = await response.json();
+                    // Solo tomamos PVPC (id=1001), ignorando Precio mercado spot por completo
+                    const pvpcItem = json.included?.find(item => item.id === '1001' || item.type === 'PVPC');
+
+                    if (!pvpcItem) {
+                        throw { motivo: 'no-publicado', detalle: 'Serie PVPC no encontrada en respuesta de REE (día no publicado)' };
+                    }
+                    if (!pvpcItem.attributes?.values?.length) {
+                        throw { motivo: 'no-publicado', detalle: 'Día no disponible en los datos de REE' };
+                    }
+
+                    const values = pvpcItem.attributes.values;
+                    const formattedHours = values.map(item => {
+                        const match = item.datetime.match(/T(\d{2}):/);
+                        const hourNum = match ? parseInt(match[1], 10) : new Date(item.datetime).getHours();
+                        const nextHourNum = hourNum + 1;
+                        const labelHour = `${String(hourNum).padStart(2, '0')}-${String(nextHourNum).padStart(2, '0')}`;
+                        const priceKwh = item.value / 1000;
+
+                        return {
+                            hour: labelHour,
+                            hourNum: hourNum,
+                            price: priceKwh
+                        };
+                    });
+
+                    save(dateStr, formattedHours);
+                    return { horas: formattedHours, fuente: 'ree' };
+                } catch (error) {
+                    if (error.motivo) {
+                        return { motivo: error.motivo, detalle: error.detalle };
+                    }
+                    return {
+                        motivo: navigator.onLine ? 'error-ree' : 'sin-conexion',
+                        detalle: error.message
+                    };
+                }
+            }
+
+            return {
+                obtener,
+                guardadoLocal: dateStr => historyData[dateStr]
+            };
+        })();
 
         let activeDateStr = getFormattedDate(new Date());
 
@@ -491,82 +579,6 @@
                 days.push(getFormattedDate(d));
             }
             return days;
-        }
-
-        function saveAndCleanup(newData, dateStr) {
-            historyData[dateStr] = newData;
-            const keepDays = getNavigableDays();
-
-            Object.keys(historyData).forEach(key => {
-                if (!keepDays.includes(key)) delete historyData[key];
-            });
-
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(historyData));
-            } catch (e) {
-                console.error('Error al guardar en localStorage:', e);
-            }
-        }
-
-        async function fetchOfficialPrices(dateStr) {
-            statusDiv.textContent = `Consultando Red Eléctrica Española para el día ${dateStr}...`;
-            const apiDate = getApiDateParam(dateStr);
-            const url = `https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real?start_date=${apiDate}T00:00&end_date=${apiDate}T23:59&time_trunc=hour`;
-
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    if (response.status === 502 || response.status === 404) {
-                        throw new Error('Día no publicado aún');
-                    }
-                    throw new Error(`Error en servidor REE (HTTP ${response.status})`);
-                }
-
-                const json = await response.json();
-                // Solo tomamos PVPC (id=1001), ignorando Precio mercado spot por completo
-                const pvpcItem = json.included?.find(item => item.id === '1001' || item.type === 'PVPC');
-
-                if (!pvpcItem) {
-                    throw new Error('Serie PVPC no encontrada en respuesta de REE (día no publicado)');
-                }
-
-                if (!pvpcItem.attributes?.values?.length) {
-                    throw new Error('Día no disponible en los datos de REE');
-                }
-
-                const values = pvpcItem.attributes.values;
-                const formattedHours = values.map(item => {
-                    const match = item.datetime.match(/T(\d{2}):/);
-                    const hourNum = match ? parseInt(match[1], 10) : new Date(item.datetime).getHours();
-                    const nextHourNum = hourNum + 1;
-                    const labelHour = `${String(hourNum).padStart(2, '0')}-${String(nextHourNum).padStart(2, '0')}`;
-                    const priceKwh = item.value / 1000;
-
-                    return {
-                        hour: labelHour,
-                        hourNum: hourNum,
-                        price: priceKwh
-                    };
-                });
-
-                saveAndCleanup(formattedHours, dateStr);
-                statusDiv.textContent = `Actualizado desde REE (${dateStr}). Datos guardados en local.`;
-                return formattedHours;
-            } catch (error) {
-                const todayStr = getFormattedDate(new Date());
-                const tomorrowObj = new Date();
-                tomorrowObj.setDate(tomorrowObj.getDate() + 1);
-                const tomorrowStr = getFormattedDate(tomorrowObj);
-
-                if (dateStr === tomorrowStr) {
-                    statusDiv.textContent = 'Los precios de mañana aún no se han publicado (suelen publicarse sobre las 20:15 - 20:30 h).';
-                } else if (!navigator.onLine) {
-                    statusDiv.textContent = 'Sin conexión a Internet y sin datos guardados para este día.';
-                } else {
-                    statusDiv.textContent = `No se pudieron cargar los datos de REE para el ${dateStr}. (${error.message})`;
-                }
-                return null;
-            }
         }
 
         function getPriceClass(price, min, max) {
@@ -734,7 +746,7 @@
 
         function renderPrices() {
             pricesContainer.innerHTML = '';
-            const dayData = historyData[activeDateStr];
+            const dayData = registroPvpc.guardadoLocal(activeDateStr);
             const todayStr = getFormattedDate(new Date());
             const isToday = (activeDateStr === todayStr);
 
@@ -798,6 +810,47 @@
             `;
         }
 
+        // Único sitio que compone los textos de status a partir de los motivos
+        // del registro (la palabra 'mañana' tiene prioridad, como antes).
+        function mensajeDelMotivo(motivo, detalle, dateStr) {
+            const tomorrowObj = new Date();
+            tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+            const tomorrowStr = getFormattedDate(tomorrowObj);
+
+            if (dateStr === tomorrowStr) {
+                return 'Los precios de mañana aún no se han publicado (suelen publicarse sobre las 20:15 - 20:30 h).';
+            }
+            if (motivo === 'sin-conexion') {
+                return 'Sin conexión a Internet y sin datos guardados para este día.';
+            }
+            return `No se pudieron cargar los datos de REE para el ${dateStr}. (${detalle})`;
+        }
+
+        // Patrón de carga común a los tres sitios: tabs, "Actualizar" e init.
+        // La carga de red se anuncia vía alConsultar; el status final depende
+        // del resultado (motivo, red, o caché local).
+        async function cargarDia(dateStr, { forzar = false, statusLocal = null } = {}) {
+            const prevStatus = statusDiv.textContent;
+            const r = await registroPvpc.obtener(dateStr, {
+                forzar,
+                alConsultar: (ds, { habiaDatosLocales }) => {
+                    if (!habiaDatosLocales) showLoading();
+                    statusDiv.textContent = `Consultando Red Eléctrica Española para el día ${ds}...`;
+                }
+            });
+
+            if (r.motivo) {
+                statusDiv.textContent = mensajeDelMotivo(r.motivo, r.detalle, dateStr);
+            } else if (r.fuente === 'ree') {
+                statusDiv.textContent = `Actualizado desde REE (${dateStr}). Datos guardados en local.`;
+            } else if (statusLocal) {
+                statusDiv.textContent = statusLocal;
+            } else {
+                statusDiv.textContent = prevStatus;
+            }
+            renderPrices();
+        }
+
         function renderTabs() {
             dayTabs.innerHTML = '';
             const navigableDays = getNavigableDays();
@@ -827,11 +880,7 @@
                     if (activeDateStr === dateStr) return;
                     activeDateStr = dateStr;
                     renderTabs();
-                    if (!historyData[activeDateStr]) {
-                        showLoading();
-                        await fetchOfficialPrices(activeDateStr);
-                    }
-                    renderPrices();
+                    await cargarDia(dateStr);
                 });
                 dayTabs.appendChild(tab);
             });
@@ -869,28 +918,19 @@
             btnFetch.disabled = true;
             const originalText = btnFetch.textContent;
             btnFetch.textContent = '↻ Cargando...';
-            if (!historyData[activeDateStr]) {
-                showLoading();
-            }
             try {
-                await fetchOfficialPrices(activeDateStr);
+                await cargarDia(activeDateStr, { forzar: true });
             } finally {
                 btnFetch.disabled = false;
                 btnFetch.textContent = originalText;
-                renderPrices();
             }
         });
 
         async function init() {
             renderTabs();
-            if (historyData[activeDateStr] && historyData[activeDateStr].length > 0) {
-                statusDiv.textContent = 'Datos cargados desde el almacenamiento local (modo offline disponible).';
-                renderPrices();
-            } else {
-                showLoading();
-                await fetchOfficialPrices(activeDateStr);
-                renderPrices();
-            }
+            await cargarDia(activeDateStr, {
+                statusLocal: 'Datos cargados desde el almacenamiento local (modo offline disponible).'
+            });
         }
 
         init();
