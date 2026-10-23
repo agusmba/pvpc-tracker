@@ -20,6 +20,9 @@ const VIEWPORTS = [
     { nombre: 'desktop', width: 1280, height: 900 }
 ]
 
+// La lógica pura del HTML, extraída por el extractor del núcleo.
+const nucleoPuro = núcleo()
+
 const CANDIDATOS = [
     process.env.PVPC_CHROME,
     path.join(raiz, '.cache', 'chrome-headless-shell-linux64', 'chrome-headless-shell'),
@@ -55,24 +58,24 @@ function buscarNavegador() {
 
 // El fixture se construye con el propio núcleo: una sola fuente de verdad para
 // la clave de almacenamiento y para los días navegables.
-function fixture(n) {
+function fixtureRegistros(logica) {
     const valorMWh = i => 60 + i * 2.6 // €/MWh: franja barata abajo, cara arriba, media en el centro
-    const horas = n.normalizarRegistroPvpc(
-        Array.from({ length: 24 }, (_, i) => ({
-            datetime: `2026-10-23T${String(i).padStart(2, '0')}:00:00.000Z`,
-            value: valorMWh(i)
-        }))
+    const horas = logica.normalizarRegistroPvpc(
+        Array.from({ length: 24 }, (_, i) => {
+            const hora = String(i).padStart(2, '0')
+            return { datetime: `2026-10-23T${hora}:00:00.000Z`, value: valorMWh(i) }
+        })
     )
     const registro = {}
-    for (const dia of n.getNavigableDays()) registro[dia] = horas
-    return { [n.STORAGE_KEY]: JSON.stringify(registro) }
+    for (const dia of logica.getNavigableDays()) registro[dia] = horas
+    return { [logica.STORAGE_KEY]: JSON.stringify(registro) }
 }
 
-function copiaConHarness(dir, n) {
+function copiaConHarness(dir) {
     const html = readFileSync(htmlFuente, 'utf8')
     // Semilla: el registro PVPC se escribe en localStorage ANTES de que arranque la
     // SPA, para que cargue offline y ningún invariante dependa de la red.
-    const siembra = `<script>var __smokeRegistro = ${JSON.stringify(fixture(n))};
+    const siembra = `<script>var __smokeRegistro = ${JSON.stringify(fixtureRegistros(nucleoPuro))};
         Object.entries(__smokeRegistro).forEach(([k, v]) => localStorage.setItem(k, v));</script>`
     const harness = `<script>${readFileSync(path.join(raiz, 'scripts', 'smoke-harness.js'), 'utf8')}</script>`
     const destino = path.join(dir, 'index.html')
@@ -112,13 +115,12 @@ if (!bin) {
     process.exit(0)
 }
 
-const n = núcleo()
 const dir = mkdtempSync(path.join(os.tmpdir(), 'pvpc-smoke-'))
 let fallo = false
 let pasados = 0
 let omitidos = 0
 try {
-    const destino = copiaConHarness(dir, n)
+    const destino = copiaConHarness(dir)
     console.log(`Smoke headless (${bin}) · ${VIEWPORTS.map(v => `${v.nombre} ${v.width}x${v.height}`).join(' + ')}`)
     for (const viewport of VIEWPORTS) {
         const dom = lanzarNavegador(bin, destino, viewport)

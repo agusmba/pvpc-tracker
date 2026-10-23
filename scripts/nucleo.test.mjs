@@ -9,7 +9,7 @@ test('el núcleo PVPC es lógica pura: se evalúa sin navegador', () => {
     assert.ok(typeof n.getFormattedDate === 'function', 'falta getFormattedDate (fecha de día)')
     assert.ok(typeof n.getApiDateParam === 'function', 'falta getApiDateParam (fecha para la API de REE)')
     assert.ok(typeof n.getNavigableDays === 'function', 'falta getNavigableDays (día navegable)')
-    assert.ok(typeof n.getPriceClass === 'function', 'falta getPriceClass (franja de precio)')
+    assert.ok(typeof n.franjaDePrecio === 'function', 'falta franjaDePrecio (franja de precio)')
     assert.ok(typeof n.normalizarRegistroPvpc === 'function', 'falta normalizarRegistroPvpc (normalización del payload REE)')
     assert.ok(typeof n.requiereRedibujar === 'function', 'falta requiereRedibujar (decisión de redibujado por ancho)')
     assert.ok(typeof n.STORAGE_KEY === 'string', 'falta STORAGE_KEY (clave del registro PVPC)')

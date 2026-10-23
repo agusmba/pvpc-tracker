@@ -289,7 +289,7 @@
         }
 
         /* Leyenda de colores de la gráfica (puntos por franja de precio) */
-        .bandlegend {
+        .leyenda-franja {
             display: flex;
             gap: 14px;
             margin-top: 8px;
@@ -298,22 +298,22 @@
             flex-wrap: wrap;
         }
 
-        .bandlegend span {
+        .leyenda-franja span {
             display: inline-flex;
             align-items: center;
             gap: 6px;
         }
 
-        .bandlegend i {
+        .leyenda-franja i {
             width: 10px;
             height: 10px;
             border-radius: 3px;
             display: inline-block;
         }
 
-        .bandlegend .lo i { background: var(--green); }
-        .bandlegend .mid i { background: var(--orange); }
-        .bandlegend .hi i { background: var(--red); }
+        .leyenda-franja .barata i { background: var(--green); }
+        .leyenda-franja .media i { background: var(--orange); }
+        .leyenda-franja .cara i { background: var(--red); }
 
         .prices-grid {
             display: grid;
@@ -347,17 +347,17 @@
             justify-content: center;
         }
 
-        .hour-card.cheap {
+        .hour-card.barata {
             border-top-color: var(--green);
             background: linear-gradient(180deg, var(--green-bg), var(--card-bg) 45%);
         }
 
-        .hour-card.medium {
+        .hour-card.media {
             border-top-color: var(--orange);
             background: linear-gradient(180deg, var(--orange-bg), var(--card-bg) 45%);
         }
 
-        .hour-card.expensive {
+        .hour-card.cara {
             border-top-color: var(--red);
             background: linear-gradient(180deg, var(--red-bg), var(--card-bg) 45%);
         }
@@ -482,11 +482,11 @@
             return days;
         }
 
-        function getPriceClass(price, min, max) {
+        function franjaDePrecio(price, min, max) {
             const range = max - min || 0.001;
-            if (price <= min + range * 0.33) return 'cheap';
-            if (price >= max - range * 0.33) return 'expensive';
-            return 'medium';
+            if (price <= min + range * 0.33) return 'barata';
+            if (price >= max - range * 0.33) return 'cara';
+            return 'media';
         }
 
         // Payload de REE → registro PVPC. REE devuelve €/MWh en `value` y un
@@ -612,6 +612,19 @@
         const chartContainer = document.getElementById('chartContainer');
         const chartWrapper = document.getElementById('chartWrapper');
 
+        // Ancho interior real de una caja: clientWidth incluye el padding, así que se
+        // descuenta lo que dice el CSS en vez de un número mágico de 32px. Un solo
+        // lector del padding de la tarjeta para el render y para el resize.
+        function anchoInterior(el) {
+            const cs = getComputedStyle(el);
+            return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        }
+
+        // La gráfica ocupa el interior de su tarjeta (escala 1:1 de los ejes).
+        function anchoDeGrafica() {
+            return Math.max(120, anchoInterior(chartWrapper));
+        }
+
         function renderSummary(dayData, isToday) {
             if (!dayData || dayData.length === 0) {
                 summaryContainer.style.display = 'none';
@@ -681,7 +694,7 @@
 
             // Escala 1:1 con el ancho interior real de la tarjeta: los textos de los ejes
             // se renderizan siempre en px reales (11-12px), no escalados por un viewBox fijo
-            const width = Math.max(120, chartWrapper.clientWidth - 32);
+            const width = anchoDeGrafica();
             const narrow = width < 460;
             const height = narrow ? 210 : 190;
             const fs = width >= 600 ? 12 : 11;
@@ -699,7 +712,7 @@
                     hour: h.hour.split('-')[0],
                     price: h.price,
                     hourNum: h.hourNum,
-                    band: getPriceClass(h.price, minPrice, maxPrice)
+                    franja: franjaDePrecio(h.price, minPrice, maxPrice)
                 };
             });
 
@@ -735,7 +748,7 @@
             // Puntos coloreados por franja de precio (barata/media/cara);
             // el de la hora actual va agrandado y contorneado
             const circles = points.map(p => {
-                const color = p.band === 'cheap' ? 'var(--green)' : p.band === 'expensive' ? 'var(--red)' : 'var(--orange)';
+                const color = p.franja === 'barata' ? 'var(--green)' : p.franja === 'cara' ? 'var(--red)' : 'var(--orange)';
                 const isNow = isToday && p.hourNum === currentHourNum;
                 return `
                 <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isNow ? 5 : 3}" fill="${color}" ${isNow ? 'stroke="var(--text-color)" stroke-width="1.5"' : ''}>
@@ -744,10 +757,10 @@
             }).join('');
 
             const legend = `
-                <div class="bandlegend">
-                    <span class="lo"><i></i>baratas</span>
-                    <span class="mid"><i></i>intermedias</span>
-                    <span class="hi"><i></i>caras</span>
+                <div class="leyenda-franja">
+                    <span class="barata"><i></i>baratas</span>
+                    <span class="media"><i></i>intermedias</span>
+                    <span class="cara"><i></i>caras</span>
                 </div>`;
 
             chartContainer.innerHTML = `
@@ -795,12 +808,12 @@
 
             dayData.forEach(h => {
                 const card = document.createElement('div');
-                const priceClass = getPriceClass(h.price, minPrice, maxPrice);
+                const franja = franjaDePrecio(h.price, minPrice, maxPrice);
                 const isCurrent = isToday && (h.hourNum === currentHourNum);
                 const isMin = (h.price === minPrice);
                 const isMax = (h.price === maxPrice);
 
-                card.className = `hour-card ${priceClass} ${isCurrent ? 'current' : ''}`;
+                card.className = `hour-card ${franja} ${isCurrent ? 'current' : ''}`;
 
                 let badgeHtml = '';
                 if (isCurrent) {
@@ -972,7 +985,7 @@
                     lastChartWidth = -1;
                     return;
                 }
-                const w = chartWrapper.clientWidth - 32;
+                const w = anchoDeGrafica();
                 if (requiereRedibujar(lastChartWidth, w)) {
                     lastChartWidth = w;
                     renderPrices();
