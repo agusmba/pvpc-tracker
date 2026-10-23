@@ -123,6 +123,13 @@
             margin-bottom: 20px;
             padding-bottom: 6px;
             -webkit-overflow-scrolling: touch;
+            /* Ocultar la barra de scroll horizontal: en móvil se arrastra con el dedo,
+               y en carga inicial aparecía un momento antes de deslizar */
+            scrollbar-width: none;
+        }
+
+        .tabs::-webkit-scrollbar {
+            display: none;
         }
 
         .tab {
