@@ -841,8 +841,26 @@
 
         init();
 
-        // La gráfica se redibuja al cambiar el ancho para mantener los ejes a escala 1:1
-        window.addEventListener('resize', renderPrices);
+        // La gráfica se redibuja solo cuando cambia el ANCHO real de la tarjeta.
+        // Los navegadores móviles disparan eventos resize durante el scroll (la barra de URL
+        // aparece/desaparece y cambia la altura del viewport): si re-renderizamos en esos
+        // eventos, el scroll salta de sitio. Ignorarlos evita el salto.
+        let lastChartWidth = -1;
+        let resizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (chartWrapper.style.display === 'none') {
+                    lastChartWidth = -1;
+                    return;
+                }
+                const w = chartWrapper.clientWidth - 32;
+                if (Math.abs(w - lastChartWidth) > 2) {
+                    lastChartWidth = w;
+                    renderPrices();
+                }
+            }, 250);
+        });
     </script>
 </body>
 </html>
