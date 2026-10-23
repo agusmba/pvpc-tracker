@@ -18,6 +18,9 @@ GitHub Pages sirve `docs/` de **`main`**: el plegado final de cualquier cambio d
 
 ## Checks
 - `scripts/check.sh` valida la sintaxis de los `<script>` de `docs/*.html` (`node --check`); cableado como pre-commit vía `git config core.hooksPath .githooks` (config local, no viaja en el clone).
+- `node --test scripts/` prueba la lógica pura del **núcleo PVPC**: el bloque delimitado por `// >>>nucleo` / `// <<<nucleo` en el HTML, extraído por `scripts/nucleo.mjs`. Sin dependencias.
+- `scripts/smoke.sh` smoke headless de geometría con el CLI de chromium (ADR 0002). Sin navegador sale 0 con aviso; binario con `scripts/get-chromium.sh`. Nada de test viaja a `docs/`: el harness solo se inyecta en una copia temporal.
+- Los tests y helpers de desarrollo viven en `scripts/`; `docs/` es solo la web publicada.
 
 ## Agent skills
 

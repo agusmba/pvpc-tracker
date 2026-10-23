@@ -15,3 +15,7 @@ _Avoid_: ventana de días
 **Franja de precio**:
 Clasificación del precio de una hora según su posición en el rango del día: barata, media o cara.
 _Avoid_: categoría, banda
+
+**Núcleo PVPC**:
+La lógica pura del registro — fecha de día, días navegables, franja de precio, normalización del payload de REE y decisión de redibujado de la gráfica — sin DOM ni red. Es el bloque que los tests de lógica pueden ejecutar bajo Node (ADR 0002).
+_Avoid_: core, kernel

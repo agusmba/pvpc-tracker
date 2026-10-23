@@ -448,7 +448,75 @@
     <div class="prices-grid" id="pricesContainer"></div>
 
     <script>
-        const STORAGE_KEY = 'ree_official_pvpc_v1';
+        /* ── núcleo PVPC · lógica pura ──────────────────────────────────────
+           Sin DOM, localStorage ni fetch: es la parte del registro que puede
+           ejecutarse bajo Node (scripts/nucleo.mjs) para los tests de lógica.
+           El ámbito global es compartido entre <script>, así que el bloque de
+           la SPA usa estas funciones directamente.
+        ──────────────────────────────────────────────────────────────────── */
+        // >>>nucleo
+        var STORAGE_KEY = 'ree_official_pvpc_v1';
+
+        function getFormattedDate(date) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${day}-${month}-${date.getFullYear()}`;
+        }
+
+        function getApiDateParam(dateStr) {
+            const parts = dateStr.split('-');
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+
+        function getNavigableDays() {
+            const days = [];
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            days.push(getFormattedDate(tomorrow));
+
+            for (let i = 0; i < 7; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                days.push(getFormattedDate(d));
+            }
+            return days;
+        }
+
+        function getPriceClass(price, min, max) {
+            const range = max - min || 0.001;
+            if (price <= min + range * 0.33) return 'cheap';
+            if (price >= max - range * 0.33) return 'expensive';
+            return 'medium';
+        }
+
+        // Payload de REE → registro PVPC. REE devuelve €/MWh en `value` y un
+        // datetime ISO; aquí se pasa a €/kWh y se etiqueta la hora como rango.
+        function normalizarRegistroPvpc(values) {
+            return values.map(item => {
+                const match = item.datetime.match(/T(\d{2}):/);
+                const hourNum = match ? parseInt(match[1], 10) : new Date(item.datetime).getHours();
+                const nextHourNum = hourNum + 1;
+                const labelHour = `${String(hourNum).padStart(2, '0')}-${String(nextHourNum).padStart(2, '0')}`;
+                const priceKwh = item.value / 1000;
+
+                return {
+                    hour: labelHour,
+                    hourNum: hourNum,
+                    price: priceKwh
+                };
+            });
+        }
+
+        // Decisión de redibujado: -1 es el sentinel de 'todavía no se dibujó'.
+        // Un resize que solo cambia la altura (barra de URL en móvil) mantiene
+        // el ancho, así que no redibuja y el scroll no salta.
+        function requiereRedibujar(anchoGuardado, anchoNuevo) {
+            return Math.abs(anchoNuevo - anchoGuardado) > 2;
+        }
+        // <<<nucleo
+    </script>
+
+    <script>
 
         // ── Módulo registroPvpc ──────────────────────────────────────────────
         // Seam: "cargar un día". Interface:
@@ -513,19 +581,7 @@
                     }
 
                     const values = pvpcItem.attributes.values;
-                    const formattedHours = values.map(item => {
-                        const match = item.datetime.match(/T(\d{2}):/);
-                        const hourNum = match ? parseInt(match[1], 10) : new Date(item.datetime).getHours();
-                        const nextHourNum = hourNum + 1;
-                        const labelHour = `${String(hourNum).padStart(2, '0')}-${String(nextHourNum).padStart(2, '0')}`;
-                        const priceKwh = item.value / 1000;
-
-                        return {
-                            hour: labelHour,
-                            hourNum: hourNum,
-                            price: priceKwh
-                        };
-                    });
+                    const formattedHours = normalizarRegistroPvpc(values);
 
                     save(dateStr, formattedHours);
                     return { horas: formattedHours, fuente: 'ree' };
@@ -555,38 +611,6 @@
         const pricesContainer = document.getElementById('pricesContainer');
         const chartContainer = document.getElementById('chartContainer');
         const chartWrapper = document.getElementById('chartWrapper');
-
-        function getFormattedDate(date) {
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            return `${day}-${month}-${date.getFullYear()}`;
-        }
-
-        function getApiDateParam(dateStr) {
-            const parts = dateStr.split('-');
-            return `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-
-        function getNavigableDays() {
-            const days = [];
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            days.push(getFormattedDate(tomorrow));
-
-            for (let i = 0; i < 7; i++) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                days.push(getFormattedDate(d));
-            }
-            return days;
-        }
-
-        function getPriceClass(price, min, max) {
-            const range = max - min || 0.001;
-            if (price <= min + range * 0.33) return 'cheap';
-            if (price >= max - range * 0.33) return 'expensive';
-            return 'medium';
-        }
 
         function renderSummary(dayData, isToday) {
             if (!dayData || dayData.length === 0) {
@@ -949,7 +973,7 @@
                     return;
                 }
                 const w = chartWrapper.clientWidth - 32;
-                if (Math.abs(w - lastChartWidth) > 2) {
+                if (requiereRedibujar(lastChartWidth, w)) {
                     lastChartWidth = w;
                     renderPrices();
                 }
