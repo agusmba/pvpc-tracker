@@ -132,6 +132,25 @@
             display: none;
         }
 
+        /* En escritorio (dispositivos con hover) se muestra una barra fina para que
+           la lista sea desplazable con rueda/ratón; en táctil sigue oculta */
+        @media (hover: hover) and (pointer: fine) {
+            .tabs {
+                scrollbar-width: thin;
+            }
+            .tabs::-webkit-scrollbar {
+                display: block;
+                height: 6px;
+            }
+            .tabs::-webkit-scrollbar-thumb {
+                background: var(--card-border);
+                border-radius: 3px;
+            }
+            .tabs::-webkit-scrollbar-track {
+                background: transparent;
+            }
+        }
+
         .tab {
             padding: 8px 14px;
             background: var(--surface2);
@@ -817,6 +836,34 @@
                 dayTabs.appendChild(tab);
             });
         }
+
+        // Arrastre horizontal con ratón en escritorio (en táctil el navegador ya arrastra nativamente)
+        let dragMoved = false;
+        dayTabs.addEventListener('pointerdown', e => {
+            if (e.pointerType !== 'mouse') return;
+            const startX = e.clientX;
+            const startScroll = dayTabs.scrollLeft;
+            dragMoved = false;
+            const onMove = ev => {
+                const dx = ev.clientX - startX;
+                if (Math.abs(dx) > 4) dragMoved = true;
+                dayTabs.scrollLeft = startScroll - dx;
+            };
+            const onUp = () => {
+                dayTabs.removeEventListener('pointermove', onMove);
+                dayTabs.removeEventListener('pointerup', onUp);
+            };
+            dayTabs.addEventListener('pointermove', onMove);
+            dayTabs.addEventListener('pointerup', onUp);
+        });
+
+        // Si hubo arrastre real, no se interpreta como clic en una pestaña
+        dayTabs.addEventListener('click', e => {
+            if (dragMoved) {
+                e.stopPropagation();
+                dragMoved = false;
+            }
+        }, true);
 
         btnFetch.addEventListener('click', async () => {
             btnFetch.disabled = true;
