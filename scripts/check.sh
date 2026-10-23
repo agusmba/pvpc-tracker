@@ -4,7 +4,7 @@
 set -euo pipefail
 
 python3 << 'PYEOF'
-import glob, re, subprocess, tempfile, os
+import glob, re, subprocess, tempfile, os, sys
 
 fail = False
 for path in glob.glob('docs/*.html'):
@@ -17,7 +17,7 @@ for path in glob.glob('docs/*.html'):
         os.unlink(tmp)
         if r.returncode != 0:
             fail = True
-            print(f'FAIL {path} (bloque {i}): {r.stderr.strip()[:300]}', file=os.stderr)
+            print(f'FAIL {path} (bloque {i}): {r.stderr.strip()[:300]}', file=sys.stderr)
 
 raise SystemExit(1 if fail else 0)
 PYEOF
