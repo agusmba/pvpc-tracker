@@ -14,7 +14,7 @@ GitHub Pages sirve `docs/` de **`main`**: el plegado final de cualquier cambio d
 - Cambios progresivos, no reescrituras.
 - Si cambia el esquema de datos persistidos, subir versión del STORAGE_KEY (`v1`, `v2`…).
 - Assets binarios (p. ej. fuentes woff2): escribir un token placeholder en el HTML y sustituirlo con un script; el base64 nunca pasa por una llamada de herramienta.
-- Prototipos (skill `prototype`): la rama desechable que captura el prototipo se llamar `prototype/*` y se pusha a origin (así queda recuperable para colaboradores).
+- Prototipos (skill `prototype`): la rama desechable que captura el prototipo se llamará `prototype/*` y se pusha a origin (así queda recuperable para colaboradores).
 
 ## Checks
 - `scripts/check.sh` valida la sintaxis de los `<script>` de `docs/*.html` (`node --check`); cableado como pre-commit vía `git config core.hooksPath .githooks` (config local, no viaja en el clone).
