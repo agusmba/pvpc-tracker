@@ -513,6 +513,114 @@
         function requiereRedibujar(anchoGuardado, anchoNuevo) {
             return Math.abs(anchoNuevo - anchoGuardado) > 2;
         }
+
+        // Resumen del día: se calcula una vez y lo usan el resumen, la gráfica
+        // y la rejilla de horas.
+        function resumenDelDia(dayData) {
+            const prices = dayData.map(h => h.price);
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            return {
+                min: min,
+                max: max,
+                avg: prices.reduce((a, b) => a + b, 0) / prices.length,
+                minHour: dayData.find(h => h.price === min)?.hour || '',
+                maxHour: dayData.find(h => h.price === max)?.hour || ''
+            };
+        }
+
+        // Markup de la gráfica (puntos coloreados por franja de precio, variante b3):
+        // se dibuja 1:1 con el ancho pasado, así los textos de los ejes salen en px
+        // reales (11-12px) y no los escala un viewBox fijo. horaActual es el número
+        // de la hora actual, o null si no es hoy. Devuelve SVG + leyenda; no toca el DOM.
+        function markupGrafica(dayData, ancho, horaActual) {
+            const resumen = resumenDelDia(dayData);
+            const priceRange = resumen.max - resumen.min || 0.001;
+
+            const narrow = ancho < 460;
+            const height = narrow ? 210 : 190;
+            const fs = ancho >= 600 ? 12 : 11;
+            const paddingLeft = narrow ? 10 : 58, paddingRight = narrow ? 10 : 12;
+            const paddingTop = narrow ? 22 : 14, paddingBottom = 28;
+            const graphWidth = ancho - paddingLeft - paddingRight;
+            const graphHeight = height - paddingTop - paddingBottom;
+            const count = dayData.length > 1 ? dayData.length - 1 : 1;
+
+            const points = dayData.map((h, i) => {
+                return {
+                    x: paddingLeft + (i / count) * graphWidth,
+                    y: paddingTop + graphHeight - ((h.price - resumen.min) / priceRange) * graphHeight,
+                    hour: h.hour.split('-')[0],
+                    price: h.price,
+                    hourNum: h.hourNum,
+                    franja: franjaDePrecio(h.price, resumen.min, resumen.max)
+                };
+            });
+
+            const pathD = points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`, '');
+            const areaD = `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${(paddingTop + graphHeight).toFixed(1)} L ${points[0].x.toFixed(1)} ${(paddingTop + graphHeight).toFixed(1)} Z`;
+
+            let gridLines = '';
+            const gridTicks = 3;
+            for (let i = 0; i <= gridTicks; i++) {
+                const ratio = i / gridTicks;
+                const y = paddingTop + graphHeight - ratio * graphHeight;
+                const val = resumen.min + ratio * priceRange;
+                // En estrecho las etiquetas van dentro de la gráfica para aprovechar el ancho
+                const labelX = narrow ? paddingLeft + 2 : paddingLeft - 8;
+                const labelAnchor = narrow ? 'start' : 'end';
+                const labelY = (i === 0 || i === gridTicks) ? y - 4 : y + 4;
+                gridLines += `
+                    <line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${(ancho - paddingRight).toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--grid-line)" stroke-dasharray="3,3" />
+                    <text x="${labelX}" y="${labelY.toFixed(1)}" text-anchor="${labelAnchor}" font-size="${fs}" class="axis-text">${val.toFixed(4)}</text>
+                `;
+            }
+
+            let xAxisLabels = '';
+            const xStep = narrow ? 6 : 4;
+            points.forEach((p, i) => {
+                if (i % xStep === 0 || i === points.length - 1) {
+                    xAxisLabels += `
+                        <text x="${p.x.toFixed(1)}" y="${height - 10}" text-anchor="middle" font-size="${fs}" class="axis-text">${p.hour}h</text>
+                    `;
+                }
+            });
+
+            // Puntos coloreados por franja de precio (barata/media/cara);
+            // el de la hora actual va agrandado y contorneado
+            const circles = points.map(p => {
+                const color = p.franja === 'barata' ? 'var(--green)' : p.franja === 'cara' ? 'var(--red)' : 'var(--orange)';
+                const isNow = horaActual !== null && p.hourNum === horaActual;
+                return `
+                <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isNow ? 5 : 3}" fill="${color}" ${isNow ? 'stroke="var(--text-color)" stroke-width="1.5"' : ''}>
+                    <title>${p.hour}:00 - ${p.price.toFixed(4)} €/kWh</title>
+                </circle>`;
+            }).join('');
+
+            const legend = `
+                <div class="leyenda-franja">
+                    <span class="barata"><i></i>baratas</span>
+                    <span class="media"><i></i>intermedias</span>
+                    <span class="cara"><i></i>caras</span>
+                </div>`;
+
+            return `
+                <svg viewBox="0 0 ${ancho} ${height}" width="${ancho}" height="${height}">
+                    <defs>
+                        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="var(--accent-color)" stop-opacity="0.18" />
+                            <stop offset="100%" stop-color="var(--accent-color)" stop-opacity="0.0" />
+                        </linearGradient>
+                    </defs>
+                    ${gridLines}
+                    ${xAxisLabels}
+                    <path d="${areaD}" fill="url(#chartGrad)" />
+                    <path d="${pathD}" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                    ${circles}
+                </svg>
+                ${legend}
+            `;
+        }
         // <<<nucleo
     </script>
 
@@ -631,13 +739,7 @@
                 return;
             }
 
-            const prices = dayData.map(h => h.price);
-            const minPrice = Math.min(...prices);
-            const maxPrice = Math.max(...prices);
-            const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
-
-            const minHour = dayData.find(h => h.price === minPrice)?.hour || '';
-            const maxHour = dayData.find(h => h.price === maxPrice)?.hour || '';
+            const resumen = resumenDelDia(dayData);
 
             const currentHourNum = new Date().getHours();
             const currentItem = isToday ? dayData.find(h => h.hourNum === currentHourNum) : null;
@@ -661,18 +763,18 @@
             html += `
                 <div class="summary-card">
                     <div class="label">Media del día</div>
-                    <div class="val">${avgPrice.toFixed(4)} €</div>
+                    <div class="val">${resumen.avg.toFixed(4)} €</div>
                     <div class="sub">€/kWh</div>
                 </div>
                 <div class="summary-card card-lo">
                     <div class="label">Mínimo</div>
-                    <div class="val">${minPrice.toFixed(4)} €</div>
-                    <div class="sub">a las ${minHour}h</div>
+                    <div class="val">${resumen.min.toFixed(4)} €</div>
+                    <div class="sub">a las ${resumen.minHour}h</div>
                 </div>
                 <div class="summary-card card-hi">
                     <div class="label">Máximo</div>
-                    <div class="val">${maxPrice.toFixed(4)} €</div>
-                    <div class="sub">a las ${maxHour}h</div>
+                    <div class="val">${resumen.max.toFixed(4)} €</div>
+                    <div class="sub">a las ${resumen.maxHour}h</div>
                 </div>
             `;
 
@@ -686,99 +788,9 @@
                 return;
             }
             chartWrapper.style.display = 'block';
-
-            const numericPrices = dayData.map(h => h.price);
-            const minPrice = Math.min(...numericPrices);
-            const maxPrice = Math.max(...numericPrices);
-            const priceRange = maxPrice - minPrice || 0.001;
-
-            // Escala 1:1 con el ancho interior real de la tarjeta: los textos de los ejes
-            // se renderizan siempre en px reales (11-12px), no escalados por un viewBox fijo
-            const width = anchoDeGrafica();
-            const narrow = width < 460;
-            const height = narrow ? 210 : 190;
-            const fs = width >= 600 ? 12 : 11;
-            const paddingLeft = narrow ? 10 : 58, paddingRight = narrow ? 10 : 12;
-            const paddingTop = narrow ? 22 : 14, paddingBottom = 28;
-            const graphWidth = width - paddingLeft - paddingRight;
-            const graphHeight = height - paddingTop - paddingBottom;
-            const count = dayData.length > 1 ? dayData.length - 1 : 1;
-            const currentHourNum = new Date().getHours();
-
-            const points = dayData.map((h, i) => {
-                return {
-                    x: paddingLeft + (i / count) * graphWidth,
-                    y: paddingTop + graphHeight - ((h.price - minPrice) / priceRange) * graphHeight,
-                    hour: h.hour.split('-')[0],
-                    price: h.price,
-                    hourNum: h.hourNum,
-                    franja: franjaDePrecio(h.price, minPrice, maxPrice)
-                };
-            });
-
-            const pathD = points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`, '');
-            const areaD = `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${(paddingTop + graphHeight).toFixed(1)} L ${points[0].x.toFixed(1)} ${(paddingTop + graphHeight).toFixed(1)} Z`;
-
-            let gridLines = '';
-            const gridTicks = 3;
-            for (let i = 0; i <= gridTicks; i++) {
-                const ratio = i / gridTicks;
-                const y = paddingTop + graphHeight - ratio * graphHeight;
-                const val = minPrice + ratio * priceRange;
-                // En estrecho las etiquetas van dentro de la gráfica para aprovechar el ancho
-                const labelX = narrow ? paddingLeft + 2 : paddingLeft - 8;
-                const labelAnchor = narrow ? 'start' : 'end';
-                const labelY = (i === 0 || i === gridTicks) ? y - 4 : y + 4;
-                gridLines += `
-                    <line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${(width - paddingRight).toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--grid-line)" stroke-dasharray="3,3" />
-                    <text x="${labelX}" y="${labelY.toFixed(1)}" text-anchor="${labelAnchor}" font-size="${fs}" class="axis-text">${val.toFixed(4)}</text>
-                `;
-            }
-
-            let xAxisLabels = '';
-            const xStep = narrow ? 6 : 4;
-            points.forEach((p, i) => {
-                if (i % xStep === 0 || i === points.length - 1) {
-                    xAxisLabels += `
-                        <text x="${p.x.toFixed(1)}" y="${height - 10}" text-anchor="middle" font-size="${fs}" class="axis-text">${p.hour}h</text>
-                    `;
-                }
-            });
-
-            // Puntos coloreados por franja de precio (barata/media/cara);
-            // el de la hora actual va agrandado y contorneado
-            const circles = points.map(p => {
-                const color = p.franja === 'barata' ? 'var(--green)' : p.franja === 'cara' ? 'var(--red)' : 'var(--orange)';
-                const isNow = isToday && p.hourNum === currentHourNum;
-                return `
-                <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isNow ? 5 : 3}" fill="${color}" ${isNow ? 'stroke="var(--text-color)" stroke-width="1.5"' : ''}>
-                    <title>${p.hour}:00 - ${p.price.toFixed(4)} €/kWh</title>
-                </circle>`;
-            }).join('');
-
-            const legend = `
-                <div class="leyenda-franja">
-                    <span class="barata"><i></i>baratas</span>
-                    <span class="media"><i></i>intermedias</span>
-                    <span class="cara"><i></i>caras</span>
-                </div>`;
-
-            chartContainer.innerHTML = `
-                <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
-                    <defs>
-                        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="var(--accent-color)" stop-opacity="0.18" />
-                            <stop offset="100%" stop-color="var(--accent-color)" stop-opacity="0.0" />
-                        </linearGradient>
-                    </defs>
-                    ${gridLines}
-                    ${xAxisLabels}
-                    <path d="${areaD}" fill="url(#chartGrad)" />
-                    <path d="${pathD}" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-                    ${circles}
-                </svg>
-                ${legend}
-            `;
+            // Adapter fino: mide el ancho interior real y escribe el markup del núcleo.
+            const horaActual = isToday ? new Date().getHours() : null;
+            chartContainer.innerHTML = markupGrafica(dayData, anchoDeGrafica(), horaActual);
         }
 
         function renderPrices() {
@@ -801,17 +813,15 @@
                 return;
             }
 
-            const numericPrices = dayData.map(h => h.price);
-            const minPrice = Math.min(...numericPrices);
-            const maxPrice = Math.max(...numericPrices);
+            const resumen = resumenDelDia(dayData);
             const currentHourNum = new Date().getHours();
 
             dayData.forEach(h => {
                 const card = document.createElement('div');
-                const franja = franjaDePrecio(h.price, minPrice, maxPrice);
+                const franja = franjaDePrecio(h.price, resumen.min, resumen.max);
                 const isCurrent = isToday && (h.hourNum === currentHourNum);
-                const isMin = (h.price === minPrice);
-                const isMax = (h.price === maxPrice);
+                const isMin = (h.price === resumen.min);
+                const isMax = (h.price === resumen.max);
 
                 card.className = `hour-card ${franja} ${isCurrent ? 'current' : ''}`;
 
