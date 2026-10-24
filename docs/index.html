@@ -469,10 +469,7 @@
         }
 
         function getNavigableDays() {
-            const days = [];
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            days.push(getFormattedDate(tomorrow));
+            const days = [manana()];
 
             for (let i = 0; i < 7; i++) {
                 const d = new Date();
@@ -480,6 +477,37 @@
                 days.push(getFormattedDate(d));
             }
             return days;
+        }
+
+        // Calendario de la ventana navegable: hoy y mañana, una vez, en el formato
+        // interno 'dd-mm-aaaa'.
+        function hoy() {
+            return getFormattedDate(new Date());
+        }
+
+        function manana() {
+            const t = new Date();
+            t.setDate(t.getDate() + 1);
+            return getFormattedDate(t);
+        }
+
+        function esHoy(dateStr) {
+            return dateStr === hoy();
+        }
+
+        function esManana(dateStr) {
+            return dateStr === manana();
+        }
+
+        // Etiqueta de la pestaña de día: mañana y hoy tienen vocablos propios;
+        // el resto es weekday corto en español + día (byte a byte como antes).
+        function etiquetaTab(dateStr) {
+            if (esManana(dateStr)) return 'Mañana 🗓️';
+            if (esHoy(dateStr)) return 'Hoy 🏠';
+            const parts = dateStr.split('-');
+            const dt = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+            const weekday = dt.toLocaleDateString('es-ES', { weekday: 'short' });
+            return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${parts[0]}/${parts[1]}`;
         }
 
         function franjaDePrecio(price, min, max) {
@@ -796,8 +824,7 @@
         function renderPrices() {
             pricesContainer.innerHTML = '';
             const dayData = registroPvpc.guardadoLocal(activeDateStr);
-            const todayStr = getFormattedDate(new Date());
-            const isToday = (activeDateStr === todayStr);
+            const isToday = esHoy(activeDateStr);
 
             renderSummary(dayData, isToday);
             renderChart(dayData, isToday);
@@ -860,11 +887,7 @@
         // Único sitio que compone los textos de status a partir de los motivos
         // del registro (la palabra 'mañana' tiene prioridad, como antes).
         function mensajeDelMotivo(motivo, detalle, dateStr) {
-            const tomorrowObj = new Date();
-            tomorrowObj.setDate(tomorrowObj.getDate() + 1);
-            const tomorrowStr = getFormattedDate(tomorrowObj);
-
-            if (dateStr === tomorrowStr) {
+            if (esManana(dateStr)) {
                 return 'Los precios de mañana aún no se han publicado (suelen publicarse sobre las 20:15 - 20:30 h).';
             }
             if (motivo === 'sin-conexion') {
@@ -901,28 +924,11 @@
         function renderTabs() {
             dayTabs.innerHTML = '';
             const navigableDays = getNavigableDays();
-            const todayStr = getFormattedDate(new Date());
-            const tomorrowObj = new Date();
-            tomorrowObj.setDate(tomorrowObj.getDate() + 1);
-            const tomorrowStr = getFormattedDate(tomorrowObj);
 
             navigableDays.forEach(dateStr => {
                 const tab = document.createElement('div');
                 tab.className = `tab ${dateStr === activeDateStr ? 'active' : ''}`;
-
-                let label = dateStr.substring(0, 5);
-                if (dateStr === tomorrowStr) {
-                    label = "Mañana 🗓️";
-                } else if (dateStr === todayStr) {
-                    label = "Hoy 🏠";
-                } else {
-                    const parts = dateStr.split('-');
-                    const dt = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-                    const weekday = dt.toLocaleDateString('es-ES', { weekday: 'short' });
-                    label = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${parts[0]}/${parts[1]}`;
-                }
-
-                tab.textContent = label;
+                tab.textContent = etiquetaTab(dateStr);
                 tab.addEventListener('click', async () => {
                     if (activeDateStr === dateStr) return;
                     activeDateStr = dateStr;
