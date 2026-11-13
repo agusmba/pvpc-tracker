@@ -23,10 +23,22 @@ datos** son dos conceptos distintos y cada uno tiene su dueño (ver `GLOSSARY.md
   `fetch(req)` del refresco puede resolver contra la caché HTTP del navegador y devolver el
   documento viejo: re-cacheamos lo stale y una publicación no llega "en la carga siguiente".
   Con `reload` el fetch salta la caché HTTP y la publicación llega de verdad.
-- **Un marcador guardado sin barra final (`/pvpc-tracker`) es la misma carpeta del scope.** Con
-  red Pages redirige con 301; sin red no hay redirección y el scope `/pvpc-tracker/` no controla
-  `/pvpc-tracker`. El SW normaliza esa ruta a la carpeta, y la clave de caché la comparte con
-  `/pvpc-tracker/index.html`, así que el shell responde sin depender del 301.
+- **La carpeta sin barra final comparte clave.** `/pvpc-tracker` y `/pvpc-tracker/index.html`
+  son la misma entrada de caché, así que las peticiones que llegan al handler (recursos,
+  llamadas desde la propia página) responden el shell aunque el URL no lleve barra.
+
+## Limitación conocida: navegar a `/pvpc-tracker` sin barra y sin red
+
+Medido en Chrome (espejo local con el servidor caído y la publicación real con el host
+resuelto a nada, mismo perfil con el SW ya instalado): una navegación a
+`https://agusmba.github.io/pvpc-tracker` **sin barra final** no la controla el Service Worker —
+el scope es `/pvpc-tracker/` y el path pedido no empieza por él—, así que el navegador va a la
+red y sin red sale la pantalla de error. No hay arreglo posible desde el repo: el SW publicado
+vive bajo `/pvpc-tracker/` y su scope no puede ser más ancho.
+
+Con red el 301 de Pages lleva a la barra y todo funciona; el marcador que Chrome guarda de la
+barra ya incluye la barra, y el `start_url` del manifest también. El caso que queda descubierto
+es un URL escrito a mano sin barra usado **en modo avión**.
 
 ## Consecuencias no obvias
 

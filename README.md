@@ -12,9 +12,9 @@ SPA ligera en un solo HTML autocontenido (`docs/index.html`) para consultar los 
 ## Uso
 1. Abrir `docs/index.html` en el navegador, o la publicación de GitHub Pages.
 2. Pulsa **↻ Actualizar** para descargar los precios del día seleccionado (los de mañana se publican sobre las 20:15–20:30).
-3. Después, la app funciona sin conexión con los datos guardados. En el móvil: abre la publicación una vez con red y añádela a la pantalla de inicio; desde entonces abre aunque no haya señal.
+3. Después, la app funciona sin conexión con los datos guardados. En el móvil: abre la publicación una vez con red y añádela a la pantalla de inicio; desde entonces abre aunque no haya señal. Si la guardas como enlace, que termine en `/` (ADR 0003).
 
 ## Notas
 - Los datos se almacenan en el navegador (`localStorage`, clave `ree_official_pvpc_v1`); borrar los datos del sitio borra el histórico.
-- El HTML lo cachea el Service Worker (`docs/sw.js`) con refresco en segundo plano: una publicación nueva llega en la carga siguiente. La API de REE nunca pasa por esa caché.
+- El HTML lo cachea el Service Worker (`docs/sw.js`) con refresco en segundo plano que salta la caché HTTP del navegador (`cache: 'reload'`): una publicación nueva llega en la carga siguiente. La API de REE nunca pasa por esa caché.
 - El código de la app vive íntegramente en `docs/index.html`; las reglas de trabajo están en `AGENTS.md`.

@@ -25,8 +25,11 @@ function carpetaDelSW(swUrl) {
     return new URL(swUrl).pathname.replace(/[^/]*$/, '')
 }
 
-// Un marcador guardado sin barra final (…/pvpc-tracker) es esa misma carpeta: con red Pages
-// redirige con 301, pero sin red no hay redirección y la caché debe responder el shell.
+// …/pvpc-tracker (sin barra final) es la misma carpeta que …/pvpc-tracker/: las peticiones que
+// llegan al handler comparten clave y respuesta. Una NAVEGACIÓN a ese URL no la controla el SW
+// (el scope siempre lleva barra y Chrome pide que el path empiece por él), así que ese caso lo
+// resuelve el 301 de Pages con red; sin red, el marcador tiene que llevar barra. Limitación con
+// evidencia en el ADR 0003.
 function destinoDe(reqUrl, swUrl) {
     const destino = new URL(reqUrl, swUrl)
     const carpeta = carpetaDelSW(swUrl).replace(/\/$/, '')

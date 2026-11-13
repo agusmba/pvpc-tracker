@@ -42,7 +42,7 @@ test('la raíz y su index.html comparten clave de caché', () => {
     assert.equal(n.claveDeCache('https://agusmba.github.io/pvpc-tracker/?utm_source=bookmark', SW), raiz)
 })
 
-test('un marcador sin barra final es la misma carpeta del scope (sin red no hay 301 de Pages)', () => {
+test('la carpeta sin barra final comparte clave con el shell (peticiones que llegan al handler)', () => {
     assert.equal(n.decidirEstrategia('https://agusmba.github.io/pvpc-tracker', SW), 'shell')
     assert.equal(n.claveDeCache('https://agusmba.github.io/pvpc-tracker', SW),
         'https://agusmba.github.io/pvpc-tracker/index.html')
@@ -50,6 +50,9 @@ test('un marcador sin barra final es la misma carpeta del scope (sin red no hay 
     const swRaiz = 'https://example.com/sw.js'
     assert.equal(n.decidirEstrategia('https://example.com/otro-sitio', swRaiz), 'red')
     assert.equal(n.decidirEstrategia('https://example.com/', swRaiz), 'shell')
+    // Navegación a la carpeta sin barra: el scope no la controla (ADR 0003); si aun así
+    // llega al handler, responde el shell en vez de ir a la red.
+    assert.equal(n.decidirEstrategia('https://agusmba.github.io/pvpc-tracker', SW), 'shell')
 })
 
 test('la precarga cubre shell, manifest e icono dentro del scope', () => {
