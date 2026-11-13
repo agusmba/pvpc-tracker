@@ -1,0 +1,28 @@
+# El guardrail que viaja con el clone. `git config core.hooksPath .githooks` es config
+# local y no llega a otro clon (lo dice el propio AGENTS.md); este job sí.
+# Job de segundos y sin navegador: los seams con navegador (scripts/smoke.sh,
+# scripts/offline.sh) son locales por diseño, según ADR 0002 y ADR 0004.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  determinista:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Sintaxis de lo publicado y de scripts/, seams de shell, y enlaces entre módulos.
+      - name: Check determinista
+        run: bash scripts/check.sh
+
+      # Lógica pura del núcleo PVPC (la del HTML y la del Service Worker).
+      - name: Tests del núcleo
+        run: node --test scripts/

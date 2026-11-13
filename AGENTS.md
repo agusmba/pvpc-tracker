@@ -20,7 +20,7 @@ GitHub Pages sirve `docs/` de **`main`**: el plegado final de cualquier cambio d
 - Prototipos (skill `prototype`): la rama desechable que captura el prototipo se llamará `prototype/*` y se pusha a origin (así queda recuperable para colaboradores).
 
 ## Checks
-- `scripts/check.sh` valida la sintaxis de lo publicado: `docs/*.js` y los `<script>` de `docs/*.html` (`node --check`); cableado como pre-commit vía `git config core.hooksPath .githooks` (config local, no viaja en el clone).
+- `scripts/check.sh` es el guardrail determinista (≈2 s, sin navegador): sintaxis de lo publicado y de `scripts/`, seams de shell y enlaces entre módulos (un `import` con nombre inventado revienta aquí). Cableado como pre-commit (`git config core.hooksPath .githooks`, config local) y como job de CI en `.github/workflows/checks.yml`, que es el que viaja en el clone.
 - `node --test scripts/` prueba la lógica pura: el bloque `// >>>nucleo` / `// <<<nucleo` del HTML (`scripts/nucleo.mjs`) y el `// >>>sw-nucleo` / `// <<<sw-nucleo` de `docs/sw.js` (`scripts/nucleo-sw.mjs`). Sin dependencias.
 - `scripts/smoke.sh` smoke headless de geometría con el CLI de chromium (ADR 0002). Sin navegador sale 0 con aviso; binario con `scripts/get-chromium.sh`. Nada de test viaja a `docs/`: el harness solo se inyecta en una copia temporal.
 - `scripts/offline.sh` smoke del **offline del shell**: espejo local de Pages bajo `/pvpc-tracker/`, SW instalado y, con el servidor caído, la SPA renderiza desde la caché del SW (motor: Chrome completo por CDP, ADR 0004 — el headless shell no registra SW). Sale 0 con aviso si falta el navegador; binario con `scripts/get-chromium.sh full`.
