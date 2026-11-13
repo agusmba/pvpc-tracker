@@ -24,5 +24,7 @@ jobs:
         run: bash scripts/check.sh
 
       # Lógica pura del núcleo PVPC (la del HTML y la del Service Worker).
+      # Los tests se pasan expandidos a propósito: en Node 22 `node --test scripts/` toma el
+      # directorio como módulo de entrada y falla (en Node 26 no).
       - name: Tests del núcleo
-        run: node --test scripts/
+        run: node --test scripts/*.test.mjs
