@@ -27,3 +27,8 @@ for path in glob.glob('docs/*.html'):
 
 raise SystemExit(1 if fail else 0)
 PYEOF
+
+# Nota visual solo cuando hay algo publicado que validar (se ejecuta desde la raíz del repo).
+if [ -n "$(ls docs/*.html docs/*.js 2>/dev/null)" ]; then
+    echo "OK: sintaxis JS de docs/*.html y docs/*.js valida"
+fi

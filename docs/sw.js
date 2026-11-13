@@ -20,21 +20,32 @@ var CACHE_SHELL = 'pvpc-shell-v1'
 // 'shell' → se sirve de la caché con refresco en segundo plano.
 // 'red'   → pasa a la red sin tocar la caché (API de REE, y el propio sw.js: Chrome lo
 //           revalida por su cuenta y guardársolo congelaría el service worker).
-function decidirEstrategia(reqUrl, swUrl) {
+// Carpeta del SW: /pvpc-tracker/sw.js → /pvpc-tracker/.
+function carpetaDelSW(swUrl) {
+    return new URL(swUrl).pathname.replace(/[^/]*$/, '')
+}
+
+// Un marcador guardado sin barra final (…/pvpc-tracker) es esa misma carpeta: con red Pages
+// redirige con 301, pero sin red no hay redirección y la caché debe responder el shell.
+function destinoDe(reqUrl, swUrl) {
     const destino = new URL(reqUrl, swUrl)
+    const carpeta = carpetaDelSW(swUrl).replace(/\/$/, '')
+    return { destino, ruta: destino.pathname === carpeta ? destino.pathname + '/' : destino.pathname }
+}
+
+function decidirEstrategia(reqUrl, swUrl) {
+    const { destino, ruta } = destinoDe(reqUrl, swUrl)
     if (destino.origin !== new URL(swUrl).origin) return 'red'
-    const ruta = destino.pathname
     if (ruta === new URL(swUrl).pathname) return 'red'
     if (ruta.endsWith('/')) return 'shell'
     return /\.(html?|webmanifest|svg|png|css|js|json)$/.test(ruta) ? 'shell' : 'red'
 }
 
 // Clave de caché estable: la raíz del scope y su index.html son la misma entrada, así que
-// /pvpc-tracker/ y /pvpc-tracker/index.html comparten respuesta. Sin query ni version.
+// /pvpc-tracker/, /pvpc-tracker y /pvpc-tracker/index.html comparten respuesta. Sin query.
 function claveDeCache(reqUrl, swUrl) {
-    const destino = new URL(reqUrl, swUrl)
-    const ruta = destino.pathname.endsWith('/') ? destino.pathname + 'index.html' : destino.pathname
-    return destino.origin + ruta
+    const { destino, ruta } = destinoDe(reqUrl, swUrl)
+    return destino.origin + (ruta.endsWith('/') ? ruta + 'index.html' : ruta)
 }
 
 // Qué se precarga en la instalación, resuelto contra la carpeta del SW.
@@ -82,26 +93,26 @@ self.addEventListener('fetch', (evento) => {
     const swUrl = self.location.href
     const clave = claveDeCache(req.url, swUrl)
     const abrir = caches.open(CACHE_SHELL)
+    // Una sola lectura del estado inicial: `respuesta` y `refresco` coinciden en si había
+    // caché, así la primera carga no dispara un segundo fetch redundante.
+    const guardado = abrir.then(cache => cache.match(clave))
 
     // Lectura: manda la caché; la red solo cubre el primer arranque (caché vacía).
-    const respuesta = (async () => {
-        const cache = await abrir
-        const guardado = await cache.match(clave)
-        if (guardado) return guardado
-        const fresca = await fetch(req)
-        if (fresca && fresca.ok) await cache.put(clave, fresca.clone())
-        return fresca
-    })()
+    const respuesta = guardado.then(g => g || fetch(req).then(async r => {
+        if (r && r.ok) await abrir.then(cache => cache.put(clave, r.clone()))
+        return r
+    }))
 
     // Refresco en segundo plano, lanzado en el dispatch para que waitUntil sea legal.
     // Solo cuando ya había caché (si no, la lectura de arriba acaba de rellenarla).
-    const refresco = abrir
-        .then(cache => cache.match(clave))
-        .then(guardado => guardado
-            ? fetch(req)
-                .then(r => (r && r.ok ? abrir.then(cache => cache.put(clave, r.clone())) : undefined))
-                .catch(() => undefined) // modo avión: se conserva lo cacheado
-            : undefined)
+    // `cache: 'reload'`: Pages responde el HTML con max-age=600 y la caché HTTP del navegador
+    // puede devolver el documento viejo; sin reload re-cacheamos lo stale y una publicación
+    // no llega "en la carga siguiente".
+    const refresco = guardado.then(g => g
+        ? fetch(req, { cache: 'reload' })
+            .then(r => (r && r.ok ? abrir.then(cache => cache.put(clave, r.clone())) : undefined))
+            .catch(() => undefined) // modo avión: se conserva lo cacheado
+        : undefined)
 
     evento.waitUntil(Promise.all([respuesta, refresco]).then(() => undefined))
     evento.respondWith(respuesta)

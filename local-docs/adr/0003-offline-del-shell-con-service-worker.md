@@ -17,6 +17,17 @@ mentiría el estado del día; el **offline de datos** ya es asunto del **registr
 (localStorage), que además sabe qué día es cada uno. El **offline del shell** y el **offline de
 datos** son dos conceptos distintos y cada uno tiene su dueño (ver `GLOSSARY.md`).
 
+## Dos trampas que el refresco tiene que sortear
+
+- **El refresco manda `cache: 'reload'`.** Pages responde el HTML con `max-age=600`, así que un
+  `fetch(req)` del refresco puede resolver contra la caché HTTP del navegador y devolver el
+  documento viejo: re-cacheamos lo stale y una publicación no llega "en la carga siguiente".
+  Con `reload` el fetch salta la caché HTTP y la publicación llega de verdad.
+- **Un marcador guardado sin barra final (`/pvpc-tracker`) es la misma carpeta del scope.** Con
+  red Pages redirige con 301; sin red no hay redirección y el scope `/pvpc-tracker/` no controla
+  `/pvpc-tracker`. El SW normaliza esa ruta a la carpeta, y la clave de caché la comparte con
+  `/pvpc-tracker/index.html`, así que el shell responde sin depender del 301.
+
 ## Consecuencias no obvias
 
 - El HTML publicado lleva 5 líneas de registro del SW; sigue siendo cero dependencias y sigue

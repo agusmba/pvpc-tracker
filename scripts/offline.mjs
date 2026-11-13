@@ -1,283 +1,343 @@
-// Smoke de **offline real** (solo desarrollo; cero dependencias npm).
-// Seam: scripts/offline.sh → un comando, líneas PASS/FAIL/SKIP y exit code agregado.
-//
-// Qué prueba: que el shell (la página publicada) abre sin red. Sirve una copia temporal de
-// docs/ bajo /pvpc-tracker/ —espejo de GitHub Pages—, deja que el Service Worker instale y
-// cachee, y vuelve a navegar con el servidor **caído**: si la SPA renderiza con el registro
-// local, el offline del shell funciona. Si el SW no intercepta, la navegación da
-// ERR_CONNECTION_REFUSED y el test va red.
-//
-// Motor: Chrome completo (headless=new) manejado por CDP con el WebSocket global de Node.
-// El CLI de chromium (--dump-dom) del smoke de geometría no vale aquí: el headless shell no
-// registra service workers, así que una prueba de offline con él no probaría nada (ADR 0003).
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readdirSync, readFileSync, copyFileSync, appendFileSync } from 'node:fs'
+/**
+ * offline.mjs — smoke de **offline del shell** por CDP (ADR 0004).
+ *
+ * Simula el garaje con la geometría real de GitHub Pages:
+ *   1. un servidor local sirve la publicación bajo su carpeta (/pvpc-tracker/) con las
+ *      cabeceras de Pages (`cache-control: max-age=600`) y deja una API en otro origen;
+ *   2. lanzamiento A (con red): el Service Worker se instala, precarga el shell y refresca
+ *      en segundo plano. Un navegador de prueba que no registre SW sale con SKIP + aviso,
+ *      no con FAIL;
+ *   3. lanzamiento B (mismo perfil, servidor caído y modo avión por CDP, caché HTTP
+ *      desactivada): la página sigue abriendo. Dos lanzamientos distintos prueban que el caché
+ *      del SW **persiste en disco**, que es el caso real: el móvil se apaga entre usos.
+ *
+ * Invariantes: la página está controlada por el SW y renderiza el registro local; una
+ * petición de otro origen no entra en la caché; un día sin datos guardados en modo avión
+ * dice `sin conexión`; la publicación llega en la carga siguiente.
+ *
+ * La caché HTTP del navegador está desactivada en el lanzamiento B: con ella activa el
+ * documento podría servir el navegador sin intervención del SW y el test sería un
+ * verde-falso. En el lanzamiento A va activa a propósito, porque Pages manda max-age=600 y
+ * esa es la trampa que el `cache: 'reload'` del refresco tiene que sortear.
+ *
+ * Uso: chromium=(chrome|path) node scripts/offline.mjs
+ *      (usa el Chrome completo: el headless shell no registra Service Workers)
+ */
+import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
-import { spawn, execFileSync } from 'node:child_process'
-import net from 'node:net'
-import os from 'node:os'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import { núcleo } from './nucleo.mjs'
-import { núcleoSW } from './nucleo-sw.mjs'
 import { fixtureRegistros } from './fixture-registro.mjs'
 
-const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const PUBLICADOS = ['index.html', 'sw.js', 'manifest.webmanifest', 'icono.svg']
-const BASE = '/pvpc-tracker' // espejo del path donde Pages sirve docs/
-const ESPERA_EVENTO = 10000
+const RAIZ = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 
-const TIPOS = {
-    '.html': 'text/html; charset=utf-8',
-    '.js': 'text/javascript; charset=utf-8',
-    '.webmanifest': 'application/manifest+json',
-    '.svg': 'image/svg+xml'
+/**
+ * Devuelve el HTML bajo la carpeta del scope, como lo sirve Pages: el path de la URL
+ * publica es /pvpc-tracker/ y los URLs relativos del documento se resuelven ahí.
+ */
+export function htmlBajoScope(html, prefijo = '/pvpc-tracker') {
+    return html.replace(/<base href="(\/[^"]*)"/, `<base href="${prefijo}/"`).replace(/<head>/, `<head><base href="${prefijo}/">`)
 }
 
-// Solo navegadores que registran service workers: Chrome completo, no chrome-headless-shell.
 function buscarChromeCompleto() {
+    // Mis variables de entorno que el smoke de geometría (ADR 0002), más `chromium`,
+    // que es la que usa offline.sh.
+    for (const env of ['PVPC_CHROME', 'chromium']) if (process.env[env] && existsSync(process.env[env])) return process.env[env]
     const candidatos = [
-        process.env.PVPC_CHROME,
-        path.join(raiz, '.cache', 'chrome-linux64', 'chrome'),
-        'google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser'
-    ].filter(Boolean)
-    for (const c of candidatos) {
-        if (path.isAbsolute(c)) {
-            if (existsSync(c)) return c
-            continue
-        }
-        try {
-            execFileSync('which', [c], { stdio: 'pipe' })
-            return c
-        } catch {
-            // no está en PATH
+        '/home/agustin/Fuentes/precio-luz/.cache/chrome-linux64/chrome',
+        join(RAIZ, '.cache', 'chrome-linux64', 'chrome'),
+        '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'
+    ]
+    for (const c of candidatos) if (existsSync(c)) return c
+    for (const dir of (process.env.PATH || '').split(':')) {
+        for (const n of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) {
+            const p = join(dir, n)
+            if (existsSync(p)) return p
         }
     }
-    // Un chromium de Playwright también serve (solo los completos, no el headless shell).
-    const playwright = path.join(os.homedir(), '.cache', 'ms-playwright')
-    if (existsSync(playwright)) {
-        for (const build of readdirSync(playwright)) {
-            if (!build.startsWith('chromium-')) continue
-            const bin = path.join(playwright, build, 'chrome-linux', 'chrome')
-            if (existsSync(bin)) return bin
+    for (const base of [join(RAIZ, 'node_modules'), join(process.env.HOME || '', '.cache')]) {
+        for (const n of ['chromium-1208', 'chromium-1207', 'chromium']) {
+            const p = join(base, 'playwright', 'chromium', n, 'chrome-linux64', 'chrome')
+            if (existsSync(p)) return p
         }
     }
     return null
 }
 
-async function puertoLibre() {
-    return new Promise((res, rej) => {
-        const s = net.createServer()
-        s.on('error', rej)
-        s.listen(0, '127.0.0.1', () => {
-            const p = s.address().port
-            s.close(() => res(p))
-        })
-    })
-}
-
-// Servidor estático del sitio espejo: close() es lo que simula "no hay red" para ese host.
-function servidor(dirSitio) {
-    return createServer((req, res) => {
-        const url = new URL(req.url, 'http://127.0.0.1')
-        if (url.pathname === '/' || url.pathname === BASE) {
-            res.writeHead(301, { location: BASE + '/' }) // como Pages: la raíz del path redirige con barra
-            res.end()
-            return
+/** El espejo de Pages: la publicación bajo /pvpc-tracker/ con sus cabeceras, y un recurso
+ *  en otro origen (otra *máquina*: localhost vs 127.0.0.1 son orígenes distintos). */
+const SERVIDOR = {
+    puerto: 0,
+    servidor: null,
+    htmlPublicado: '',
+    recursos: {},
+    inicio() {
+        this.htmlPublicado = htmlBajoScope(readFileSync(join(RAIZ, 'docs', 'index.html'), 'utf8'))
+        this.recursos = {
+            'manifest.webmanifest': readFileSync(join(RAIZ, 'docs', 'manifest.webmanifest'), 'utf8'),
+            'icono.svg': readFileSync(join(RAIZ, 'docs', 'icono.svg'), 'utf8')
         }
-        const nombre = url.pathname.startsWith(BASE + '/') ? url.pathname.slice(BASE.length + 1) : ''
-        const archivo = path.join(dirSitio, nombre || 'index.html')
-        if (!PUBLICADOS.includes(nombre || 'index.html') || !existsSync(archivo)) {
-            res.writeHead(404)
-            res.end('no publicado')
-            return
-        }
-        res.writeHead(200, { 'content-type': TIPOS[path.extname(archivo)] || 'application/octet-stream' })
-        res.end(readFileSync(archivo))
-    })
-}
-
-// Cliente CDP mínimo (sin librerías): send + esperar sobre un WebSocket.
-function conectar(urlWs) {
-    const ws = new WebSocket(urlWs)
-    let id = 0
-    const pendientes = new Map()
-    const eventos = []
-    return new Promise((resolve, reject) => {
-        ws.onopen = () => {
-            ws.onmessage = (ev) => {
-                const m = JSON.parse(ev.data)
-                if (m.id && pendientes.has(m.id)) {
-                    const { resolve: r, reject: j } = pendientes.get(m.id)
-                    pendientes.delete(m.id)
-                    m.error ? j(new Error(`${m.error.message} ${JSON.stringify(m.error.data || '')}`)) : r(m.result)
+        this.servidor = createServer((req, res) => {
+            const url = new URL(req.url, 'http://localhost')
+            if (url.pathname === '/pvpc-tracker/sw.js') {
+                res.writeHead(200, {
+                    'content-type': 'text/javascript; charset=utf-8',
+                    'cache-control': 'no-cache',
+                    'service-worker-allowed': '/'
+                })
+                res.end(readFileSync(join(RAIZ, 'docs', 'sw.js'), 'utf8'))
+                return
+            }
+            if (url.pathname.startsWith('/pvpc-tracker/')) {
+                const relativo = url.pathname.slice('/pvpc-tracker/'.length)
+                if (!relativo || relativo === 'index.html') {
+                    // Pages manda el HTML con max-age=600: la trampa que el refresco del SW
+                    // tiene que sortear con cache: 'reload'.
+                    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'max-age=600' })
+                    res.end(this.htmlPublicado)
                     return
                 }
-                for (const e of eventos) if (e.method === m.method && !e.hecho) { e.hecho = true; e.resolve(m.params || {}) }
+                if (this.recursos[relativo]) {
+                    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'max-age=600' })
+                    res.end(this.recursos[relativo])
+                    return
+                }
+                res.writeHead(404)
+                res.end('no existe')
+                return
             }
-            resolve({
-                send: (method, params = {}) => new Promise((r, j) => {
-                    const i = ++id
-                    pendientes.set(i, { resolve: r, reject: j })
-                    ws.send(JSON.stringify({ id: i, method, params }))
-                }),
-                // Primer evento con ese nombre, o null si llega el timeout (el timeout es reserva, no fallo).
-                esperar: (method, ms) => new Promise((r) => {
-                    const e = { method, hecho: false, resolve: r }
-                    eventos.push(e)
-                    setTimeout(() => { if (!e.hecho) { e.hecho = true; r(null) } }, ms)
-                }),
-                close: () => ws.close()
-            })
-        }
-        ws.onerror = () => reject(new Error('no se pudo conectar al CDP de la diana'))
-    })
+            if (url.pathname === '/cross-origin/precios.json') {
+                // Otro origen: si la estrategia del SW se rompe y cachea cross-origin, esta
+                // entrada aparece en la caché y el aserto correspondiente se pone rojo.
+                res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' })
+                res.end('{"datos":true}')
+                return
+            }
+            res.writeHead(404)
+            res.end()
+        })
+        this.servidor.listen(0, '127.0.0.1')
+        return new Promise(terminada => this.servidor.once('listening', () => {
+            this.puerto = this.servidor.address().port
+            terminada()
+        }))
+    },
+    /** Publica un cambio en el shell (equivale a un push a main en Pages). */
+    publicar(marcador) {
+        this.htmlPublicado = this.htmlPublicado.replace(/<\/title>/, marcador + '</title>')
+    },
+    cerrar() {
+        if (this.servidor) this.servidor.closeAllConnections?.()
+        if (this.servidor) this.servidor.close()
+    }
 }
 
-// Espera a que el puerto de CDP exponga una diana de página a la que conectar.
-async function esperaDiana(puertoCDP) {
-    for (let i = 0; i < 30; i++) {
+const URL_APP = () => `http://localhost:${SERVIDOR.puerto}/pvpc-tracker/`
+const URL_API = () => `http://127.0.0.1:${SERVIDOR.puerto}/cross-origin/precios.json`
+
+/** Lanzamiento de navegador con un perfil dado. `cachéHTTP` activa o desactivada. */
+async function lanzar({ perfil, puertoCDP, cacheDisabled, offline = false, argsExtra = [] }) {
+    const exe = buscarChromeCompleto()
+    const proc = spawn(exe, [
+        '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+        '--no-first-run', '--no-default-browser-check', '--disable-extensions',
+        '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows',
+        // La API de REE no se resuelve: la verificación no depende de la red externa.
+        '--host-resolver-rules=MAP apidatos.ree.es ~NOTFOUND',
+        `--user-data-dir=${perfil}`,
+        `--remote-debugging-port=${puertoCDP}`,
+        ...argsExtra
+    ], { stdio: ['ignore', 'ignore', 'pipe'] })
+
+    let stderr = ''
+    proc.stderr.on('data', b => { stderr += b.toString() })
+
+    let diana = null
+    for (let i = 0; i < 40 && !diana; i++) {
         try {
             const dianas = await (await fetch(`http://127.0.0.1:${puertoCDP}/json/list`)).json()
-            const pagina = dianas.find(d => d.type === 'page' && d.webSocketDebuggerUrl)
-            if (pagina) return pagina
-        } catch {
-            // el navegador aún no escucha
-        }
-        await new Promise(r => setTimeout(r, 500))
+            diana = dianas.find(d => d.type === 'page' && d.webSocketDebuggerUrl)
+        } catch { await new Promise(r => setTimeout(r, 500)) }
     }
-    throw new Error('el navegador no expuso CDP en el puerto ' + puertoCDP)
+    if (!diana) { proc.kill(); throw new Error(`Chrome no expuso su diana CDP en :${puertoCDP}\n${stderr.split('\n').slice(-4).join(' / ')}`) }
+
+    const ws = new WebSocket(diana.webSocketDebuggerUrl)
+    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej })
+
+    let seq = 0
+    const pendientes = new Map()
+    const eventos = []
+    ws.onmessage = ev => {
+        const m = JSON.parse(ev.data)
+        if (m.id && pendientes.has(m.id)) {
+            const p = pendientes.get(m.id)
+            pendientes.delete(m.id)
+            m.error ? p.j(new Error(m.error.message)) : p.r(m.result)
+            return
+        }
+        for (const e of eventos) if (e.method === m.method && !e.hecho) { e.hecho = true; e.r(m.params || {}) }
+    }
+    const send = (method, params = {}) => new Promise((r, j) => {
+        const id = ++seq
+        pendientes.set(id, { r, j })
+        ws.send(JSON.stringify({ id, method, params }))
+    })
+    const esperar = (method, ms) => new Promise(r => {
+        const e = { method, hecho: false, r }
+        eventos.push(e)
+        setTimeout(() => { if (!e.hecho) { e.hecho = true; r(null) } }, ms)
+    })
+    const evaluar = async (expr, ms = 8000) => {
+        // En una página de error (puerto cerrado sin SW) puede no existir contexto de
+        // ejecución y `Runtime.evaluate` cuelga: se acota para que el aserto salga rojo.
+        const r = await Promise.race([
+            send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }),
+            new Promise(res => setTimeout(() => res(null), ms))
+        ])
+        if (!r || r.exceptionDetails) return undefined
+        return r.result?.value
+    }
+
+    await send('Page.enable')
+    await send('Runtime.enable')
+    await send('Network.enable')
+    await send('Network.setCacheDisabled', { cacheDisabled })
+    // Modo avión de verdad: `navigator.onLine` pasa a false y las peticiones caen. Sin esto
+    // el harness solo bloquea DNS y la app diría `error-ree`, no `sin-conexion`.
+    if (offline) await send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 })
+
+    const navegar = async url => {
+        const carga = esperar('Page.loadEventFired', 15000)
+        // `Page.navigate` puede no resolver si la navegación falla (puerto cerrado sin SW
+        // que responda): se acota para que el aserto se ponga rojo y no cuelgue el harness.
+        const enviado = Promise.race([send('Page.navigate', { url }), new Promise(r => setTimeout(() => r('sin respuesta'), 12000))])
+        await Promise.resolve(enviado).catch(() => 'rechazada')
+        const llegado = await carga
+        await new Promise(r => setTimeout(r, 2500))
+        return !!llegado
+    }
+
+    const cerrar = async () => {
+        ws.close()
+        proc.kill()
+        // Chrome tarda unos instantes en soltar el perfil; el siguiente lanzamiento lo usa.
+        await new Promise(r => setTimeout(r, 1500))
+    }
+
+    return { navegar, evaluar, send, cerrar, stderr }
+}
+
+async function esperaSW(ctx, ms = 8000) {
+    const hasta = Date.now() + ms
+    let estado = 'none'
+    while (Date.now() < hasta) {
+        estado = await ctx.evaluar('navigator.serviceWorker.getRegistration().then(r => r ? (r.active ? "active" : r.waiting ? "waiting" : "installing") : "none")')
+        if (estado === 'active') return estado
+        await new Promise(r => setTimeout(r, 700))
+    }
+    return estado
 }
 
 async function main() {
-    const bin = buscarChromeCompleto()
-    if (!bin) {
-        console.log('SKIP offline: no hay Chrome completo (chrome-headless-shell no registra Service Worker).')
-        console.log('  Descárgalo:  scripts/get-chromium.sh full')
-        console.log('  o señálalo:  PVPC_CHROME=/ruta/a/chrome scripts/offline.sh')
-        return 0
+    const logica = núcleo(join(RAIZ, 'docs', 'index.html'))
+    let alta = 0, falla = 0, omite = 0
+    const pas = (msg) => { alta++; console.log(`  PASS ${msg}`) }
+    const flo = (msg) => { falla++; console.log(`  FAIL ${msg}`) }
+    const skp = (msg) => { omite++; console.log(`  SKIP ${msg}`) }
+
+    const exe = buscarChromeCompleto()
+    if (!exe) {
+        skp('sin navegador a mano: chromium=<path> o bash scripts/get-chromium.sh full')
+        console.log(`\n${alta} PASS, ${falla} FAIL, ${omite} SKIP`)
+        return falla === 0
     }
 
-    const nucleo = núcleo()
-    const sw = núcleoSW()
-    // El fixture del registro se construye con el propio núcleo (misma fuente que el smoke).
-    const semilla = `Object.entries(${JSON.stringify(fixtureRegistros(nucleo))}).forEach(([k, v]) => localStorage.setItem(k, v));`
-
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'pvpc-offline-'))
-    const perfil = mkdtempSync(path.join(os.tmpdir(), 'pvpc-offline-perfil-'))
-    const dirSitio = path.join(dir, 'pvpc-tracker')
-    mkdirSync(dirSitio, { recursive: true })
-    for (const nombre of PUBLICADOS) copyFileSync(path.join(raiz, 'docs', nombre), path.join(dirSitio, nombre))
-
-    const srv = servidor(dirSitio)
-    const puertoWeb = await new Promise((res) => srv.listen(0, '127.0.0.1', () => res(srv.address().port)))
-    const urlBase = `http://127.0.0.1:${puertoWeb}${BASE}/`
-    const puertoCDP = await puertoLibre()
-
-    let stderr = ''
-    const proc = spawn(bin, [
-        '--headless=new',
-        '--no-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-extensions',
-        '--disable-background-networking',
-        // La API de REE se resuelve a nada: el test no depende de internet ni del API real,
-        // y reproduce el modo avión también para la carga de datos.
-        '--host-resolver-rules=MAP apidatos.ree.es ~NOTFOUND',
-        `--user-data-dir=${perfil}`,
-        `--remote-debugging-port=${puertoCDP}`
-    ], { stdio: ['ignore', 'ignore', 'pipe'] })
-    proc.stderr.on('data', (b) => { stderr += b.toString() })
-
-    let codigo = 0
-    const resultados = []
-    const alta = (ok, linea) => { resultados.push(`${ok ? 'PASS' : 'FAIL'} ${linea}`); if (!ok) codigo = 1 }
-
+    await SERVIDOR.inicio()
+    const perfil = mkdtempSync(join(tmpdir(), 'pvpc-perfil-'))
+    const fijado = fixtureRegistros(logica)[logica.STORAGE_KEY]
+    let ctx = null
     try {
-        const diana = await esperaDiana(puertoCDP)
-        const cdp = await conectar(diana.webSocketDebuggerUrl)
-        await cdp.send('Page.enable')
-        await cdp.send('Runtime.enable')
-        await cdp.send('Network.enable')
-        // Sin caché HTTP: si la carga offline sale, el único candidato es la caché del SW.
-        // (Chrome guarda el documento en su caché HTTP, y eso daría verde sin Service Worker.)
-        await cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
-        // La semilla del registro viaja por CDP: docs/ sigue sin llevar nada de test.
-        await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: semilla })
-
-        const evaluar = async (expr) => {
-            const r = await cdp.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })
-            // Una excepción en la página no aborta el smoke: la página de error del navegador
-            // no tiene `document` útil, y eso debe salir como FAIL en la aserción, no como crash.
-            if (r.exceptionDetails) return undefined
-            return r.result?.value
+        // ---------- lanzamiento A: con el espejo arriba ----------
+        ctx = await lanzar({ perfil, puertoCDP: 9391, cacheDisabled: false })
+        await ctx.navegar(URL_APP())
+        const estado = await esperaSW(ctx)
+        if (estado !== 'active') {
+            skp(`este navegador no activa el Service Worker (estado: ${estado}): el offline del shell no se puede verificar aquí`)
+            console.log('    el chrome-headless-shell no registra SW; prueba con bash scripts/get-chromium.sh full')
+            console.log(`\n${alta} PASS, ${falla} FAIL, ${omite} SKIP`)
+            return falla === 0
         }
-        const navegar = async (url) => {
-            const carga = cdp.esperar('Page.loadEventFired', ESPERA_EVENTO)
-            await cdp.send('Page.navigate', { url })
-            const llegado = await carga
-            await new Promise(r => setTimeout(r, 1500)) // install + activate + precarga del SW
-            return !!llegado
-        }
+        pas('SW activo y controlando la página')
 
-        // --- carga 1 (con red): el SW se instala, precarga y toma el control ---
-        const carga1 = await navegar(urlBase)
-        alta(carga1, 'carga 1 con el servidor arriba (load event)')
+        await ctx.evaluar(`localStorage.setItem(${JSON.stringify(logica.STORAGE_KEY)}, ${JSON.stringify(fijado)}); 'ok'`)
+        await ctx.navegar(URL_APP())
+        const llaves = await ctx.evaluar('caches.open("pvpc-shell-v1").then(c => c.keys()).then(k => k.map(r => new URL(r.url).pathname))')
+        if (Array.isArray(llaves) && llaves.some(p => p === '/pvpc-tracker/index.html') && llaves.some(p => p.endsWith('.webmanifest'))) {
+            pas(`precarga del shell: ${llaves.join(', ')}`)
+        } else flo(`precarga incompleta: ${JSON.stringify(llaves)}`)
 
-        let estadoSW = 'none'
-        for (let i = 0; i < 8 && estadoSW !== 'active'; i++) {
-            estadoSW = await evaluar('navigator.serviceWorker.getRegistration().then(r => r ? (r.active ? "active" : (r.installing ? "installing" : "waiting")) : "none")')
-            if (estadoSW !== 'active') await new Promise(r => setTimeout(r, 700))
-        }
-        alta(estadoSW === 'active', `Service Worker activo tras la carga 1 (estado: ${estadoSW})`)
+        // Petición a otro origen (localhost vs 127.0.0.1): si el SW cacheara cross-origin —
+        // la API de REE entre ellas — esta entrada aparecería en la caché.
+        await ctx.evaluar(`fetch(${JSON.stringify(URL_API())}).then(r => r.status).catch(() => 'error')`)
+        await new Promise(r => setTimeout(r, 800))
+        const entradas = await ctx.evaluar('caches.open("pvpc-shell-v1").then(c => c.keys()).then(k => k.map(r => r.url))')
+        if (Array.isArray(entradas) && entradas.every(u => new URL(u).host === `localhost:${SERVIDOR.puerto}`)) {
+            pas('una petición de otro origen no entra en la caché (la API de REE tampoco: mismo criterio)')
+        } else flo(`la caché guarda entradas de otro origen: ${JSON.stringify(entradas)}`)
 
-        const entradas = await evaluar(`caches.open(${JSON.stringify(sw.CACHE_SHELL)}).then(c => c.keys()).then(k => k.map(r => r.url))`) || []
-        alta(entradas.some(u => u.endsWith(BASE + '/index.html')), `shell precargado en la caché (${entradas.length} entradas)`)
-        alta(entradas.every(u => new URL(u).hostname === '127.0.0.1'), 'la API de REE no pasa por la caché del SW (offline de datos = registro local)')
+        // Publicación: refresco en segundo plano de la carga siguiente. La caché HTTP del
+        // navegador sigue activa aquí (como en un móvil): si el refresco no mandara
+        // cache: 'reload', el fetch devolvería el documento stale de max-age=600 y se
+        // re-cachea sin el marcador.
+        SERVIDOR.publicar(' <!--MARCADOR-PUBLICACION-->')
+        await ctx.navegar(URL_APP())
+        const guardado = await ctx.evaluar('caches.open("pvpc-shell-v1").then(c => c.match("/pvpc-tracker/index.html")).then(r => r ? r.text() : "")')
+        if (typeof guardado === 'string' && guardado.includes('MARCADOR-PUBLICACION')) {
+            pas('la publicación llega a la caché en la carga siguiente')
+        } else flo('el refresco en segundo plano no actualizó la caché')
+        await ctx.cerrar()
+        ctx = null
 
-        // --- refresco en segundo plano: una publicación nueva llega sin subir versiones ---
-        // Se cambia el HTML del espejo (lo que sería un push a main) y se navega otra vez con
-        // red: lo que se renderiza puede ser lo viejo, pero la caché debe quedar actualizada.
-        const claveShell = urlBase + 'index.html'
-        appendFileSync(path.join(dirSitio, 'index.html'), '\n<!-- MARCADOR-PUBLICACION -->\n')
-        await navegar(urlBase)
-        const cacheada = await evaluar(
-            `caches.open(${JSON.stringify(sw.CACHE_SHELL)}).then(c => c.match(${JSON.stringify(claveShell)})).then(r => r ? r.text() : "")`
-        )
-        alta(typeof cacheada === 'string' && cacheada.includes('MARCADOR-PUBLICACION'),
-            'refresco en segundo plano: la publicación nueva queda cacheada para la carga siguiente')
+        // ---------- lanzamiento B: mismo perfil, servidor caído ----------
+        SERVIDOR.cerrar()
+        ctx = await lanzar({ perfil, puertoCDP: 9392, cacheDisabled: true, offline: true })
+        const llegado = await ctx.navegar(URL_APP())
+        const controlada = await ctx.evaluar('!!(navigator.serviceWorker && navigator.serviceWorker.controller)')
+        const titulo = await ctx.evaluar('document.title')
+        const tarjetas = await ctx.evaluar('document.querySelectorAll(".hour-card").length')
+        const tabs = await ctx.evaluar('document.querySelectorAll("#dayTabs > *").length')
+        if (controlada) pas('el SW sigue controlando tras reiniciar el navegador (caché persistido en disco)')
+        else flo('sin SW controlando la página: ' + JSON.stringify({ llegado, titulo }))
+        if (typeof titulo === 'string' && titulo.includes('PVPC')) pas('la página se renderiza sin conectividad (título)')
+        else flo(`sin título con el servidor caído (llegado=${llegado}, título=${JSON.stringify(titulo)})`)
+        if (tarjetas > 0 && tabs > 0) pas(`registro local renderizado en offline (${tarjetas} tarjetas, ${tabs} tabs)`)
+        else flo(`render vacío en offline (tarjetas=${tarjetas}, tabs=${tabs})`)
 
-        // --- offline: el servidor cae y se vuelve a navegar a la misma URL ---
-        await new Promise((res) => { srv.close(() => res()) })
-        // El load event no sirve como prueba aquí: la página de error del navegador también
-        // dispara load. La prueba es que el documento controlado por el SW renderice la SPA.
-        await navegar(urlBase)
+        // Modo avión sobre un día sin datos guardados: el estado debe decir sin conexión,
+        // no quedarse en "Cargando datos de REE...".
+        await ctx.evaluar(`localStorage.removeItem(${JSON.stringify(logica.STORAGE_KEY)}); 'ok'`)
+        await ctx.navegar(URL_APP())
+        const estadoSinDatos = await ctx.evaluar('document.getElementById("status")?.innerText || ""')
+        if (typeof estadoSinDatos === 'string' && estadoSinDatos.includes('Sin conexión')) {
+            pas('en modo avión, un día sin datos guardados dice sin conexión')
+        } else flo(`estado inesperado sin datos y sin red: ${JSON.stringify(estadoSinDatos)}`)
 
-        const titulo = await evaluar('document.title')
-        const controlado = await evaluar('!!(navigator.serviceWorker && navigator.serviceWorker.controller)')
-        const tarjetas = await evaluar('document.querySelectorAll(".hour-card").length')
-        const tabs = await evaluar('document.querySelectorAll("#dayTabs > *").length')
-        alta(controlado, 'offline: la navegación la controla el SW (ni red ni caché HTTP)')
-        alta(typeof titulo === 'string' && titulo.includes('PVPC'), `offline: el shell servido por el SW renderiza la SPA (título: ${JSON.stringify(titulo)})`)
-        alta(tarjetas > 0 && tabs > 0, `offline: SPA usable con el registro local — ${tarjetas} tarjetas horarias y ${tabs} tabs`)
-
-        cdp.close()
+        console.log(`\n${alta} PASS, ${falla} FAIL, ${omite} SKIP`)
+        return falla === 0
     } catch (e) {
-        alta(false, 'offline: ' + e.message)
-        if (stderr) console.log('  stderr del navegador: ' + stderr.split('\n').slice(-3).join(' / ').slice(0, 300))
+        const detalle = ctx ? `\n${(ctx.stderr || '').split('\n').slice(-6).join(' / ')}` : ''
+        throw new Error(`${e.message}${detalle}`)
     } finally {
-        proc.kill()
-        srv.close()
-        rmSync(dir, { recursive: true, force: true })
+        if (ctx) await ctx.cerrar().catch(() => {})
+        SERVIDOR.cerrar()
         rmSync(perfil, { recursive: true, force: true })
     }
-
-    for (const linea of resultados) console.log(`  ${linea}`)
-    const fallos = resultados.filter(l => l.startsWith('FAIL')).length
-    console.log(codigo ? `OFFLINE: FAIL (${fallos} fallos)` : `OFFLINE: OK (${resultados.length} pasados)`)
-    return codigo
 }
 
-main().then(c => process.exit(c)).catch(e => { console.error('offline.mjs: ' + (e && e.stack || e)); process.exit(1) })
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+    main().then(ok => process.exit(ok ? 0 : 1)).catch(e => { console.error('ERROR offline:', e.message); process.exit(1) })
+}

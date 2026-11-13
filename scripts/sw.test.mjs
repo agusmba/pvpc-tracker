@@ -42,6 +42,16 @@ test('la raíz y su index.html comparten clave de caché', () => {
     assert.equal(n.claveDeCache('https://agusmba.github.io/pvpc-tracker/?utm_source=bookmark', SW), raiz)
 })
 
+test('un marcador sin barra final es la misma carpeta del scope (sin red no hay 301 de Pages)', () => {
+    assert.equal(n.decidirEstrategia('https://agusmba.github.io/pvpc-tracker', SW), 'shell')
+    assert.equal(n.claveDeCache('https://agusmba.github.io/pvpc-tracker', SW),
+        'https://agusmba.github.io/pvpc-tracker/index.html')
+    // La raíz del dominio (carpeta vacía) no se confunde con un path suelto.
+    const swRaiz = 'https://example.com/sw.js'
+    assert.equal(n.decidirEstrategia('https://example.com/otro-sitio', swRaiz), 'red')
+    assert.equal(n.decidirEstrategia('https://example.com/', swRaiz), 'shell')
+})
+
 test('la precarga cubre shell, manifest e icono dentro del scope', () => {
     // El array sale del realm del sandbox (otro prototipo de Array): se extiende para
     // comparar contenidos, no el prototipo del realm.
