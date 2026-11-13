@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { núcleo } from './nucleo.mjs'
+import { fixtureRegistros } from './fixture-registro.mjs'
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // Fuente bajo prueba: por defecto la web publicada. Se puede señalar otra copia
@@ -57,19 +58,7 @@ function buscarNavegador() {
 }
 
 // El fixture se construye con el propio núcleo: una sola fuente de verdad para
-// la clave de almacenamiento y para los días navegables.
-function fixtureRegistros(logica) {
-    const valorMWh = i => 60 + i * 2.6 // €/MWh: franja barata abajo, cara arriba, media en el centro
-    const horas = logica.normalizarRegistroPvpc(
-        Array.from({ length: 24 }, (_, i) => {
-            const hora = String(i).padStart(2, '0')
-            return { datetime: `2026-10-23T${hora}:00:00.000Z`, value: valorMWh(i) }
-        })
-    )
-    const registro = {}
-    for (const dia of logica.getNavigableDays()) registro[dia] = horas
-    return { [logica.STORAGE_KEY]: JSON.stringify(registro) }
-}
+// la clave de almacenamiento y para los días navegables (scripts/fixture-registro.mjs).
 
 function copiaConHarness(dir) {
     const html = readFileSync(htmlFuente, 'utf8')

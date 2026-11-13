@@ -1,6 +1,8 @@
 # PVPC Tracker
 
-SPA autocontenida en `docs/index.html`: precios PVPC oficiales de REE, offline con localStorage, historial semanal, mobile-first. Sin dependencias externas.
+SPA autocontenida en `docs/index.html`: precios PVPC oficiales de REE, historial semanal, mobile-first. Sin dependencias externas.
+
+Dos offlines distintos (GLOSSARY): el **offline del shell** lo da `docs/sw.js` (la página abre sin red), el **offline de datos** el registro en localStorage.
 
 GitHub Pages sirve `docs/` de **`main`**: el plegado final de cualquier cambio de UI va en `main`.
 
@@ -10,16 +12,18 @@ GitHub Pages sirve `docs/` de **`main`**: el plegado final de cualquier cambio d
 3. Al terminar: migrar el código a `docs/index.html`, verificar regresiones y cerrar el issue con un comentario resumen (`gh issue close <n> --comment "..."`).
 
 ## Reglas
-- Todo en un solo archivo HTML; comentarios en español.
+- Un solo HTML autocontenido (sin JS ni CSS externos); los únicos otros archivos publicados son `sw.js`, `manifest.webmanifest` e `icono.svg`. Comentarios en español.
 - Cambios progresivos, no reescrituras.
-- Si cambia el esquema de datos persistidos, subir versión del STORAGE_KEY (`v1`, `v2`…).
+- Si cambia el esquema de datos persistidos, subir versión del STORAGE_KEY (`v1`, `v2`…). La caché del shell no necesita bump al publicar: se refresca en segundo plano (ADR 0003); `CACHE_SHELL` solo sube si cambia la precarga o la lógica del SW.
+- La API de REE no se cachea en el SW: el offline de datos es del registro (ADR 0003).
 - Assets binarios (p. ej. fuentes woff2): escribir un token placeholder en el HTML y sustituirlo con un script; el base64 nunca pasa por una llamada de herramienta.
 - Prototipos (skill `prototype`): la rama desechable que captura el prototipo se llamará `prototype/*` y se pusha a origin (así queda recuperable para colaboradores).
 
 ## Checks
-- `scripts/check.sh` valida la sintaxis de los `<script>` de `docs/*.html` (`node --check`); cableado como pre-commit vía `git config core.hooksPath .githooks` (config local, no viaja en el clone).
-- `node --test scripts/` prueba la lógica pura del **núcleo PVPC**: el bloque delimitado por `// >>>nucleo` / `// <<<nucleo` en el HTML, extraído por `scripts/nucleo.mjs`. Sin dependencias.
+- `scripts/check.sh` valida la sintaxis de lo publicado: `docs/*.js` y los `<script>` de `docs/*.html` (`node --check`); cableado como pre-commit vía `git config core.hooksPath .githooks` (config local, no viaja en el clone).
+- `node --test scripts/` prueba la lógica pura: el bloque `// >>>nucleo` / `// <<<nucleo` del HTML (`scripts/nucleo.mjs`) y el `// >>>sw-nucleo` / `// <<<sw-nucleo` de `docs/sw.js` (`scripts/nucleo-sw.mjs`). Sin dependencias.
 - `scripts/smoke.sh` smoke headless de geometría con el CLI de chromium (ADR 0002). Sin navegador sale 0 con aviso; binario con `scripts/get-chromium.sh`. Nada de test viaja a `docs/`: el harness solo se inyecta en una copia temporal.
+- `scripts/offline.sh` smoke del **offline del shell**: espejo local de Pages bajo `/pvpc-tracker/`, SW instalado y, con el servidor caído, la SPA renderiza desde la caché del SW (motor: Chrome completo por CDP, ADR 0004 — el headless shell no registra SW). Sale 0 con aviso si falta el navegador; binario con `scripts/get-chromium.sh full`.
 - Los tests y helpers de desarrollo viven en `scripts/`; `docs/` es solo la web publicada.
 
 ## Agent skills

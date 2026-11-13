@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# Check determinista: extrae los bloques <script> de docs/*.html y valida su sintaxis con node --check.
-# Cableado como pre-commit (.githooks/pre-commit). Sin dependencias externas.
+# Check determinista: valida la sintaxis de los scripts publicados (docs/*.js, como sw.js) y
+# de los bloques <script> de docs/*.html con node --check. Cableado como pre-commit (.githooks/pre-commit).
 set -euo pipefail
 
 python3 << 'PYEOF'
 import glob, re, subprocess, tempfile, os, sys
 
 fail = False
+for path in glob.glob('docs/*.js'):
+    r = subprocess.run(['node', '--check', path], capture_output=True, text=True)
+    if r.returncode != 0:
+        fail = True
+        print(f'FAIL {path}: {r.stderr.strip()[:300]}', file=sys.stderr)
+
 for path in glob.glob('docs/*.html'):
     html = open(path, encoding='utf-8').read()
     for i, m in enumerate(re.finditer(r'<script>(.*?)</script>', html, re.S)):

@@ -43,7 +43,7 @@ Sin navegador disponible, `scripts/smoke.sh` sale 0 con un aviso accionable: el 
 …haga falta emulación de móvil/puntero, eventos de input reales, o CI con versión de navegador fijada. Entonces se cambia **solo el motor**, detrás del mismo seam:
 
 - **Playwright** como runner (eventos reales, emulación, determinismo): ~120 MB de navegador más una librería en el repo de desarrollo.
-- **CDP directo** con el `WebSocket` global de Node (~60 líneas, sin librería): mismos eventos reales, más código propio que mantener.
+- **CDP directo** con el `WebSocket` global de Node (~60 líneas, sin librería): mismos eventos reales, más código propio que mantener. Ya lo usa el seam de **offline** (`scripts/offline.sh`, ADR 0004): el headless shell no registra Service Worker, así que el offline del shell no se puede probar con el CLI.
 - **Firefox ya instalado + geckodriver** (WebDriver sobre `fetch` de Node): cero descarga de navegador, acoplado a la versión de Firefox.
 
 Descartadas y por qué: **jsdom/linkedom** — sin motor de layout no puede medir geometría, y los cuatro bugs son geométricos. **Navegación interactiva del agente** — miles de tokens por paso, no determinista, no ejecutable en pre-commit ni CI.

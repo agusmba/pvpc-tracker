@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# Guardrail: valida los scripts de docs/*.html antes de commit (scripts/check.sh).
+# Guardrail: valida lo publicado antes de commit (scripts/check.sh): docs/*.js y los <script> de docs/*.html.
 exec scripts/check.sh
