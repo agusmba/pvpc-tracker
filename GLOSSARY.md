@@ -19,3 +19,15 @@ _Avoid_: categoría, banda
 **Núcleo PVPC**:
 La lógica pura del registro — fecha de día, días navegables, franja de precio, normalización del payload de REE y decisión de redibujado de la gráfica — sin DOM ni red. Es el bloque que los tests de lógica pueden ejecutar bajo Node (ADR 0002).
 _Avoid_: core, kernel
+
+**Shell**:
+El documento que arranca el tracker: todo lo que necesita para dibujar va dentro, incluida la fuente.
+_Avoid_: página, app, HTML
+
+**Offline del shell**:
+Que el tracker abra sin red: el shell ya está en el dispositivo. No afirma que haya precios que mostrar.
+_Avoid_: modo offline, modo avión, caché de la página
+
+**Offline de datos**:
+Que el tracker tenga precios que mostrar sin red: el día está en el registro. No afirma que el shell esté en el dispositivo.
+_Avoid_: caché local, caché de la API

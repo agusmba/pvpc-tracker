@@ -1,0 +1,21 @@
+{
+    "name": "PVPC Oficial REE",
+    "short_name": "PVPC",
+    "description": "Precios PVPC oficiales de REE, con historial semanal y apertura sin conexión.",
+    "lang": "es",
+    "dir": "ltr",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#f4f1fa",
+    "theme_color": "#f4f1fa",
+    "icons": [
+        {
+            "src": "icono.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}

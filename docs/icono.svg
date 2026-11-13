@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Rayo">
+    <!-- Icono de la app. El fondo va a sangre (sin esquinas redondeadas) porque un icono
+         maskable recorta el lienzo: el rayo queda dentro del círculo seguro central. -->
+    <rect width="512" height="512" fill="#8f7bb8" />
+    <path d="M296 100 L176 268 L248 268 L216 412 L336 244 L264 244 Z" fill="#f4f1fa" />
+</svg>

@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PVPC Oficial REE</title>
+    <!-- PWA: el manifest convierte la página en app instalable (scope relativo, así
+         funciona en /pvpc-tracker/ igual que en una raíz de dominio). El Service Worker
+         (sw.js) es lo que hace que el enlace guardado abra sin red. -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#f4f1fa">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#211d2e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
         /* Fuente embebida (subset latin, woff2 como data URI): funciona offline sin red. */
         @font-face {
@@ -987,6 +995,17 @@
         }
 
         init();
+
+        // Offline del shell: el SW cachea este HTML, así que el enlace guardado en el móvil
+        // abre en el garaje sin conectividad. Solo en contexto seguro (https o localhost);
+        // en file:// el navegador no registra SW y la SPA sigue funcionando igual.
+        if ('serviceWorker' in navigator &&
+            (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+            window.addEventListener('load', () => {
+                // Sin SW no hay caché del shell: la SPA sigue sirviendo datos del registro local.
+                navigator.serviceWorker.register('sw.js').catch(() => { });
+            });
+        }
 
         // La gráfica se redibuja solo cuando cambia el ANCHO real de la tarjeta.
         // Los navegadores móviles disparan eventos resize durante el scroll (la barra de URL
